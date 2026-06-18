@@ -38,4 +38,23 @@ final class FeedbackSupportTests: XCTestCase {
         XCTAssertEqual(json["releaseURL"], "https://github.com/zhengzizhe/conductor/releases/latest")
         XCTAssertEqual(json["updateChannel"], "manual-github-release")
     }
+
+    func testResponseProtocolRequiresBusinessSuccessCode() throws {
+        let url = URL(string: "http://zzzplus.cloud/api/feedback")!
+        let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
+        let success = Data(#"{"code":0,"message":"ok","data":{"id":"feedback-1"}}"#.utf8)
+        XCTAssertNoThrow(try FeedbackClient.validateResponse(data: success, response: response))
+
+        let failure = Data(#"{"code":1001,"message":"invalid email","data":null}"#.utf8)
+        XCTAssertThrowsError(try FeedbackClient.validateResponse(data: failure, response: response)) { error in
+            XCTAssertEqual(error.localizedDescription, "invalid email")
+            XCTAssertEqual(error.feedbackUserMessage, "invalid email")
+        }
+    }
+
+    func testTransportFailureUsesUserFriendlyMessage() throws {
+        let error = FeedbackEndpointError.requestFailed(502)
+        XCTAssertEqual(error.localizedDescription, "反馈接口返回状态码 502")
+        XCTAssertEqual(error.feedbackUserMessage, "反馈提交失败，请稍后重试。")
+    }
 }

@@ -18,9 +18,9 @@ The in-app form requires:
 
 Phone numbers are not supported. Pure phone-number-like values such as `13800138000` or `+8613800138000` are rejected by `FeedbackEmailValidator`.
 
-## Reserved API
+## API
 
-The backend is not wired yet. The request builder and client boundary are reserved in:
+The request builder and client boundary live in:
 
 - `Sources/ConductorApp/FeedbackSupport.swift`
 
@@ -41,7 +41,7 @@ Content-Type: application/json
 
 The feedback service currently supports HTTP only. Do not configure this endpoint with `https://` until the service adds TLS support.
 
-Payload:
+Request payload:
 
 ```json
 {
@@ -53,7 +53,17 @@ Payload:
 }
 ```
 
-`FeedbackClient` currently uses a no-op transport so the UI can validate and exercise the reserved boundary without sending network traffic. Replace the default transport with a `URLSession` sender when backend support lands.
+Response payload uses the shared three-part shape:
+
+```json
+{
+  "code": 0,
+  "message": "ok",
+  "data": {}
+}
+```
+
+`code == 0` means the feedback was accepted by the service. Any other `code` is treated as a business failure even when the HTTP status is `200`; the app keeps the dialog open and shows `message` so the user can retry. Non-2xx HTTP responses are treated as transport failures and are shown to users as a generic retry message; technical details such as HTTP status codes are logged only.
 
 ## Update Metadata
 
