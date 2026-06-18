@@ -97,13 +97,13 @@ struct TabBarView: View {
 
                 // 右侧快捷按钮组（软圆角容器，对标 Craft 的按钮组）
                 HStack(spacing: 2) {
-                Button(action: { isFeedbackPresented = true }) {
-                                        Image(systemName: "text.bubble")
-                                            .font(.system(size: 12, weight: .medium))
-                                            .foregroundStyle(AppStyle.textSecondary)
-                                    }
-                                    .buttonStyle(IconButtonStyle(size: 26))
-                                    .help(L("反馈"))
+                    IconOnlyButton(
+                        systemName: "text.bubble",
+                        help: L("反馈"),
+                        size: 26,
+                        symbolSize: 12) {
+                            isFeedbackPresented = true
+                        }
                     IconOnlyButton(
                         systemName: AppStyle.theme.isDark ? "moon.stars.fill" : "sun.max.fill",
                         help: L("切换深/浅主题"),
