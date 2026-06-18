@@ -13,6 +13,7 @@ struct TabBarView: View {
     @FocusState private var renameFocused: Bool
     /// 胶囊串的内容宽度：tab 少时滚动区收身到正好包住内容，把剩余宽度让给拖拽区。
     @State private var pillsWidth: CGFloat = 0
+    @State private var isFeedbackPresented = false
 
     var body: some View {
         let ws = coordinator.store.workspaces.first { $0.id == coordinator.store.activeWorkspace }
@@ -75,6 +76,13 @@ struct TabBarView: View {
 
                 // 右侧快捷按钮组（软圆角容器，对标 Craft 的按钮组）
                 HStack(spacing: 2) {
+                    Button(action: { isFeedbackPresented = true }) {
+                        Image(systemName: "text.bubble")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(AppStyle.textSecondary)
+                    }
+                    .buttonStyle(IconButtonStyle(size: 26))
+                    .help(L("反馈"))
                     Button(action: { coordinator.toggleTheme() }) {
                         Image(systemName: AppStyle.theme.isDark ? "moon.stars.fill" : "sun.max.fill")
                             .font(.system(size: 12, weight: .medium))
@@ -110,6 +118,11 @@ struct TabBarView: View {
         .padding(.bottom, 4)
         .frame(maxWidth: .infinity)
         .background(AppStyle.windowBackground)   // 与终端区同底，无分隔条
+        .sheet(isPresented: $isFeedbackPresented) {
+            FeedbackSheetView {
+                isFeedbackPresented = false
+            }
+        }
         .onChange(of: renameFocused) { _, focused in
             if !focused, editingTab != nil { commitRename() }
         }

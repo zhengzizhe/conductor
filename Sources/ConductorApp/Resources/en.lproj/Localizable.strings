@@ -599,3 +599,25 @@
 "用真实项目写一段教程、录屏或故障排查记录。" = "Write a short guide, recording, or troubleshooting note from a real project.";
 "不用写完整方案；真实场景和取舍比口号更有用。" = "No full proposal needed; real scenarios and tradeoffs are more useful than slogans.";
 "点击提交这个方向，标题已带上方向名" = "Submit this thread with the title pre-filled";
+
+/* ===== Feedback ===== */
+"反馈" = "Feedback";
+"应用内反馈和 GitHub Issue 是两个入口，请按场景选择。" = "In-app feedback and GitHub Issues are separate paths. Choose the one that fits.";
+"应用内反馈" = "In-app feedback";
+"用于留下邮箱和问题描述，方便后续功能上新或相关版本发布时通知你。当前仅预留提交接口，暂不接后端。" = "Leave your email and issue details so we can notify you about feature launches or related versions. The submit endpoint is reserved; no backend is wired yet.";
+"邮箱" = "Email";
+"请输入有效邮箱；暂不支持手机号。" = "Enter a valid email. Phone numbers are not supported yet.";
+"暂不支持手机号。" = "Phone numbers are not supported yet.";
+"问题描述" = "Issue details";
+"公开 GitHub Issue" = "Public GitHub Issue";
+"适合公开的 bug、需求讨论或带截图日志的问题。这个入口会打开浏览器，不会提交应用内反馈表单。" = "Use this for public bugs, feature discussions, or issues with screenshots and logs. This opens your browser and does not submit the in-app form.";
+"前往 GitHub 提 Issue" = "Open GitHub Issue";
+"版本与更新" = "Version and updates";
+"当前版本" = "Current version";
+"Release 链接" = "Release link";
+"自动更新方式" = "Update method";
+"当前通过 GitHub Releases 手动下载更新；自动更新接入后会沿用这里的版本通知信息。" = "Updates are currently downloaded manually from GitHub Releases. When automatic updates are added, this version notification metadata will be reused.";
+"提交中…" = "Submitting…";
+"提交应用内反馈" = "Submit in-app feedback";
+"已通过校验；提交接口已预留，后端接入后会发送到配置的 domain。" = "Validated. The submit endpoint is reserved and will send to the configured domain once the backend is connected.";
+"提交失败：%@" = "Submit failed: %@";
