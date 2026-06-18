@@ -252,7 +252,7 @@ private struct FolderTreeRowView: View {
     let onOpenFile: () -> Void
     @State private var hovering = false
 
-    /// 每级缩进宽度（层级参考线画在每格中央）。
+    /// 每级缩进宽度（仅留白，不画竖线）。
     private static let indentWidth: CGFloat = 14
     private var isRoot: Bool { row.depth == 0 }
 
@@ -282,24 +282,22 @@ private struct FolderTreeRowView: View {
                 Spacer(minLength: 0)
                 if hovering, row.isDirectory {
                     HStack(spacing: 3) {
-                        Button(action: onCdHere) {
-                            Image(systemName: "arrow.right.to.line")
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundStyle(AppStyle.textSecondary)
-                                .frame(width: 20, height: 20)
-                                .background(Circle().fill(AppStyle.hoverFill))
-                        }
-                        .buttonStyle(.plain)
-                        .help(L("当前终端 cd 到这里"))
-                        Button(action: onOpenTerminal) {
-                            Image(systemName: "terminal")
-                                .font(.system(size: 10.5, weight: .semibold))
-                                .foregroundStyle(AppStyle.accent)
-                                .frame(width: 20, height: 20)
-                                .background(Circle().fill(AppStyle.accent.opacity(0.12)))
-                        }
-                        .buttonStyle(.plain)
-                        .help(L("在此目录开终端"))
+                        IconOnlyButton(
+                            systemName: "arrow.right.to.line",
+                            help: L("当前终端 cd 到这里"),
+                            size: 22,
+                            symbolSize: 10,
+                            weight: .semibold,
+                            tint: AppStyle.textSecondary,
+                            action: onCdHere)
+                        IconOnlyButton(
+                            systemName: "terminal",
+                            help: L("在此目录开终端"),
+                            size: 22,
+                            symbolSize: 10.5,
+                            weight: .semibold,
+                            tint: AppStyle.accent,
+                            action: onOpenTerminal)
                     }
                 }
             }
@@ -307,12 +305,12 @@ private struct FolderTreeRowView: View {
             .padding(.trailing, 6)
             .frame(height: 27)
             .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                     .fill(isHighlighted
                         ? AppStyle.accent.opacity(0.18)
                         : (hovering ? AppStyle.hoverFill : Color.clear)))
             .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                     .strokeBorder(isHighlighted ? AppStyle.accent.opacity(0.5) : Color.clear, lineWidth: 1))
             .contentShape(Rectangle())
         }
@@ -326,23 +324,16 @@ private struct FolderTreeRowView: View {
     private var gitBadge: some View {
         Image(systemName: "arrow.triangle.branch")
             .font(.system(size: 8.5, weight: .semibold))
-            .foregroundStyle(Color(red: 0.94, green: 0.51, blue: 0.28).opacity(0.9))
+            .foregroundStyle(AppStyle.waitAmber.opacity(0.9))
             .help(L("Git 仓库"))
     }
 
-    /// 层级参考线：每级一条贯穿行高的细竖线，折叠树常见的视觉锚点。
+    /// 层级缩进：只用留白表达层级，不画硬竖线（用户强烈反感硬线条）。
     @ViewBuilder
     private var indentGuides: some View {
         if row.depth > 0 {
-            HStack(spacing: 0) {
-                ForEach(0..<row.depth, id: \.self) { _ in
-                    Rectangle()
-                        .fill(AppStyle.separator.opacity(0.6))
-                        .frame(width: 1)
-                        .frame(width: Self.indentWidth)
-                }
-            }
-            .frame(height: 27)
+            Spacer()
+                .frame(width: Self.indentWidth * CGFloat(row.depth), height: 27)
         }
     }
 

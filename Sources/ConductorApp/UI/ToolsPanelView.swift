@@ -10,6 +10,17 @@ enum ToolsTab: String, CaseIterable, Identifiable {
     case coCreate
 
     var id: String { rawValue }
+    /// 右侧只保留快速查看/轻量工具；大型管理对象进入 Agent Tools 管理台。
+    static var panelTabs: [ToolsTab] { [.cli, .usage, .snippets] }
+
+    var managementModule: AgentToolsManagementModule? {
+        switch self {
+        case .skills: return .skills
+        case .hooks: return .hooks
+        default: return nil
+        }
+    }
+
     var title: String {
         switch self {
         case .cli: return "CLI"
@@ -17,7 +28,7 @@ enum ToolsTab: String, CaseIterable, Identifiable {
         case .skills: return "Skills"
         case .hooks: return "Hooks"
         case .snippets: return L("片段")
-        case .coCreate: return L("共享")
+        case .coCreate: return L("共创")
         }
     }
     var icon: String {
@@ -32,7 +43,7 @@ enum ToolsTab: String, CaseIterable, Identifiable {
     }
 }
 
-/// 右侧多分段工具面板：CLI 工具检测 / Token 用量 / Skill 管理 / Hook 管理。
+/// 右侧快速工具面板：只放 CLI、用量和片段；Skills / Agents / Hooks 走完整管理台。
 struct ToolsPanelView: View {
     let coordinator: AppCoordinator
     var onClose: () -> Void = {}
@@ -42,69 +53,69 @@ struct ToolsPanelView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Divider().overlay(AppStyle.separator)
             content
         }
         .frame(maxHeight: .infinity)
-        .background(AppStyle.windowBackground)
-        .overlay(alignment: .leading) {
-            Rectangle().fill(AppStyle.separator).frame(width: 1).allowsHitTesting(false)
-        }
+        .background(.clear)   // 透明：用根底统一磨砂
     }
 
     private var header: some View {
         HStack(spacing: 10) {
             segmented
             Spacer(minLength: 8)
-            Button(action: onClose) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(AppStyle.textSecondary)
-                    .frame(width: 26, height: 26)
-                    .background(Circle().fill(AppStyle.hoverFill))
-                    .contentShape(Circle())
-            }
-            .buttonStyle(PressScaleStyle())
+            IconOnlyButton(
+                systemName: "xmark",
+                help: L("关闭"),
+                size: 28,
+                symbolSize: 11,
+                weight: .bold,
+                action: onClose)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 16)
-        .padding(.bottom, 12)
+        .padding(.horizontal, 12)
+        .padding(.top, 14)
+        .padding(.bottom, 10)
     }
 
     /// 分段控件：凹槽容器 + 选中片「抬起」（白片/亮片 + 柔阴影），对标系统分段而非彩色按钮。
     private var segmented: some View {
         let theme = AppStyle.theme
-        return HStack(spacing: 2) {
-            ForEach(ToolsTab.allCases) { tab in
-                let selected = coordinator.toolsTab == tab
-                Button {
-                    withAnimation(Motion.snappy) {
-                        coordinator.toolsTab = tab
-                    }
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: tab.icon)
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(selected ? AppStyle.accent : AppStyle.textTertiary)
-                        Text(tab.title)
-                            .font(.system(size: 11.5, weight: selected ? .semibold : .medium))
-                            .foregroundStyle(selected ? AppStyle.textPrimary : AppStyle.textSecondary)
-                    }
-                    .padding(.horizontal, 10)
-                    .frame(height: 24)
-                    .background {
-                        if selected {
-                            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                .fill(theme.elevated)
-                                .shadow(color: .black.opacity(theme.isDark ? 0.35 : 0.10), radius: 3, y: 1)
+        return ScrollView(.horizontal) {
+            HStack(spacing: 2) {
+                ForEach(ToolsTab.panelTabs) { tab in
+                    let selected = coordinator.toolsTab == tab
+                    Button {
+                        withAnimation(Motion.snappy) {
+                            coordinator.toolsTab = tab
                         }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: tab.icon)
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(selected ? AppStyle.accent : AppStyle.textTertiary)
+                            Text(tab.title)
+                                .font(.system(size: 11, weight: selected ? .semibold : .medium))
+                                .foregroundStyle(selected ? AppStyle.textPrimary : AppStyle.textSecondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
+                        }
+                        .padding(.horizontal, 7)
+                        .frame(height: 24)
+                        .background {
+                            if selected {
+                                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                    .fill(theme.elevated)
+                                    .shadow(color: .black.opacity(theme.isDark ? 0.35 : 0.10), radius: 3, y: 1)
+                            }
+                        }
+                        .contentShape(RoundedRectangle(cornerRadius: 7))
                     }
-                    .contentShape(RoundedRectangle(cornerRadius: 7))
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
+            .padding(3)
         }
-        .padding(3)
+        .scrollIndicators(.never)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .fill(AppStyle.hoverFill))
@@ -116,11 +127,17 @@ struct ToolsPanelView: View {
         case .cli:
             CLIToolsView(coordinator: coordinator, onClose: onClose)
         case .usage:
-            UsageStatsView()
-        case .skills:
-            SkillsManagerView()
-        case .hooks:
-            HooksManagerView()
+            UsageStatsView {
+                coordinator.openAgentToolsManagement(.usage)
+            }
+        case .skills, .hooks:
+            Color.clear
+                .onAppear {
+                    if let module = coordinator.toolsTab.managementModule {
+                        coordinator.openAgentToolsManagement(module)
+                    }
+                    coordinator.toolsTab = .cli
+                }
         case .snippets:
             SnippetsManagerView(coordinator: coordinator)
         case .coCreate:

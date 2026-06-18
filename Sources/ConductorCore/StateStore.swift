@@ -3,7 +3,7 @@ import Foundation
 /// 读写持久化状态文件。写入原子化；读取对缺失/损坏/版本不符做兜底，绝不抛给上层。
 public struct StateStore {
     public enum LoadOutcome: Equatable {
-        case loaded       // 成功读到兼容状态
+        case loaded       // 成功读到当前状态
         case fresh        // 文件不存在，返回空状态
         case recovered    // 文件损坏/版本不符，已备份坏文件并返回空状态
     }

@@ -3,6 +3,7 @@ import SwiftUI
 
 /// Token 用量仪表盘：扫描 Claude / Codex 会话日志，按天 / 模型 / 项目聚合 token 与估算成本。
 struct UsageStatsView: View {
+    var onOpenManagement: () -> Void = {}
     /// 主题变 → 重渲染（AppStyle 跟随）。不观察的话切主题后停在旧配色。
     @ObservedObject private var configStore = ConfigStore.shared
     @State private var report: UsageReport?
@@ -86,7 +87,7 @@ struct UsageStatsView: View {
                     .font(.system(size: 9.5, weight: .medium))
                     .opacity(0.75)
             }
-            .foregroundStyle(selected ? .white : AppStyle.textSecondary)
+            .foregroundStyle(selected ? AppStyle.theme.primarySolidText : AppStyle.textSecondary)
             .padding(.horizontal, 9)
             .frame(height: 24)
             .background(Capsule().fill(selected ? AppStyle.accent : AppStyle.hoverFill))
@@ -101,12 +102,19 @@ struct UsageStatsView: View {
             Text(L("Token 用量"))
                 .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(AppStyle.textPrimary)
+            IconOnlyButton(
+                systemName: "rectangle.3.group",
+                help: L("打开用量管理"),
+                size: 24,
+                symbolSize: 10.5,
+                tint: AppStyle.textTertiary,
+                action: onOpenManagement)
             Spacer()
             ForEach([7, 30, 90], id: \.self) { d in
                 Button { daysBack = d; selectedDay = nil; reload() } label: {
                     Text(L("%ld天", d))
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(daysBack == d ? .white : AppStyle.textSecondary)
+                        .foregroundStyle(daysBack == d ? AppStyle.theme.primarySolidText : AppStyle.textSecondary)
                         .padding(.horizontal, 9)
                         .frame(height: 24)
                         .background(
@@ -115,16 +123,14 @@ struct UsageStatsView: View {
                 }
                 .buttonStyle(PressScaleStyle())
             }
-            Button(action: reload) {
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(AppStyle.textSecondary)
-                    .frame(width: 24, height: 24)
-                    .background(Circle().fill(AppStyle.hoverFill))
-                    .rotationEffect(.degrees(loading ? 360 : 0))
-                    .animation(loading ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: loading)
-            }
-            .buttonStyle(PressScaleStyle())
+            IconOnlyButton(
+                systemName: "arrow.clockwise",
+                help: L("刷新用量统计"),
+                size: 24,
+                symbolSize: 11,
+                weight: .bold,
+                tint: AppStyle.textSecondary,
+                action: reload)
             .disabled(loading)
         }
     }
@@ -237,9 +243,9 @@ struct UsageStatsView: View {
                 .fill(Self.claudeColor)
                 .frame(height: max(claudeCost * scale, claudeCost > 0 ? 1.5 : 0))
             if dayTotals.costUSD == 0 {
-                RoundedRectangle(cornerRadius: 1, style: .continuous)
-                    .fill(AppStyle.separator)
-                    .frame(height: 1.5)
+                Circle()
+                    .fill(AppStyle.textTertiary.opacity(0.35))
+                    .frame(width: 3, height: 3)
             }
         }
         .frame(maxWidth: .infinity, alignment: .bottom)
@@ -318,7 +324,7 @@ struct UsageStatsView: View {
             (L("输入"), g.inputTokens, .blue),
             (L("输出"), g.outputTokens, .purple),
             (L("缓存写"), g.cacheCreationTokens, .teal),
-            (L("缓存读"), g.cacheReadTokens, Color.gray.opacity(0.55)),
+            (L("缓存读"), g.cacheReadTokens, AppStyle.textTertiary.opacity(0.55)),
         ]
         let total = max(g.totalTokens, 1)
         return VStack(alignment: .leading, spacing: 8) {
@@ -509,7 +515,7 @@ struct UsageStatsView: View {
             Text(loading ? L("更新中…") : L("更新于 %@", UsageRelative.text(r.generatedAt)))
                 .font(.system(size: 9.5, weight: .medium))
                 .foregroundStyle(AppStyle.textTertiary)
-            Text(L("成本按公开价目表估算，第三方代理/订阅实际计费可能不同。扫描自 ~/.claude 与 ~/.codex 会话日志。"))
+            Text(L("成本按公开价目表估算，第三方代理/订阅实际计费可能不同。数据来自本机会话记录。"))
                 .font(.system(size: 9.5))
                 .foregroundStyle(AppStyle.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -519,14 +525,17 @@ struct UsageStatsView: View {
     private var loadingRow: some View {
         HStack(spacing: 8) {
             ProgressView().controlSize(.small)
-            Text(L("正在扫描会话日志…")).font(.system(size: 12)).foregroundStyle(AppStyle.textSecondary)
+            Text(L("正在读取本机会话…")).font(.system(size: 12)).foregroundStyle(AppStyle.textSecondary)
             Spacer()
         }.padding(.vertical, 20)
     }
 
     private var emptyRow: some View {
-        Text(L("没有找到用量数据")).font(.system(size: 12)).foregroundStyle(AppStyle.textTertiary)
-            .padding(.vertical, 20)
+        ToolEmptyState(
+            icon: "chart.bar.xaxis",
+            title: L("没有找到用量数据"),
+            compact: true)
+        .padding(.top, 8)
     }
 
     // MARK: - 加载

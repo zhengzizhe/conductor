@@ -41,7 +41,7 @@ struct SettingsSection<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Space.xs) {
             Text(title)
                 .font(.system(size: 11, weight: .semibold))
                 .tracking(0.6)
@@ -64,7 +64,7 @@ struct SettingsRow<Control: View>: View {
             Text(label)
                 .font(.system(size: 13))
                 .foregroundStyle(AppStyle.textPrimary)
-            Spacer(minLength: 12)
+            Spacer(minLength: Space.sm)
             control
         }
         .padding(.horizontal, 2)
@@ -146,7 +146,7 @@ struct ThemedStepper: View {
             button("plus") { set(value + step) }
         }
         .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                 .fill(AppStyle.theme.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.04)))
     }
 
@@ -163,6 +163,7 @@ struct ThemedStepper: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(PressScaleStyle())
+        .help(icon == "minus" ? L("减少") : L("增加"))
     }
 }
 
@@ -182,18 +183,24 @@ struct ThemedTextField: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                     .fill(AppStyle.theme.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.04)))
             .onSubmit(onSubmit)
     }
 }
 
-/// 按下轻微缩放反馈的按钮样式（通用微交互）。
+/// 按下反馈的按钮样式。
+///
+/// 早期默认做 0.94 缩放，但管理台/Skills 列表里大量文字按钮会在点击时进入缩放合成层，
+/// macOS 上小字号文本容易发糊。默认改成不缩放，只用透明度做反馈；需要缩放的少数场景可显式传值。
 struct PressScaleStyle: ButtonStyle {
+    var pressedScale: CGFloat = 1
+    var pressedOpacity: Double = 0.82
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.86 : 1)
-            .opacity(configuration.isPressed ? 0.6 : 1)
-            .animation(.spring(response: 0.25, dampingFraction: 0.6), value: configuration.isPressed)
+            .scaleEffect(configuration.isPressed ? pressedScale : 1)
+            .opacity(configuration.isPressed ? pressedOpacity : 1)
+            .animation(Motion.hover, value: configuration.isPressed)
     }
 }

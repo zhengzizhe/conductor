@@ -156,11 +156,11 @@ final class PaneContainerView: NSView, NSDraggingSource, NSMenuDelegate {
     var canDrag = false
     /// 放大态：头条亮「已放大」徽标，点击还原（⌘⏎ 同效）。
     var isZoomed = false { didSet { if isZoomed != oldValue { header.isZoomed = isZoomed } } }
-
     /// 卡片四周留的间隙（露出画布 + 给柔阴影留空间）。紧凑一些。
     private let gap: CGFloat = 3
     private let headerH: CGFloat = 22
-    private let cornerRadius: CGFloat = 12
+    /// 与卡片圆角一致（统一到设计系统圆角阶梯）。
+    private let cornerRadius: CGFloat = Radius.md
     /// 柔阴影层（在 frameView 之下、同形状；frameView 不透明地盖住它的填充，只露出四周阴影）。
     private let shadowView = NSView()
     /// 统一圆角卡片：含头条 + 终端，共用一个圆角；masksToBounds 把里面的 Metal 终端裁成圆角。
@@ -188,7 +188,7 @@ final class PaneContainerView: NSView, NSDraggingSource, NSMenuDelegate {
         self.hostView = hostView
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.backgroundColor = NSColor(AppStyle.windowBackground).cgColor   // 间隙露出的画布
+        layer?.backgroundColor = .clear   // 间隙/画布透明：露出窗口毛玻璃（pane 卡片自带实色）
 
         // 柔阴影层（最底）
         shadowView.wantsLayer = true
@@ -198,16 +198,15 @@ final class PaneContainerView: NSView, NSDraggingSource, NSMenuDelegate {
         applyCardShadow()
 
         frameView.wantsLayer = true
-        frameView.layer?.backgroundColor = AppStyle.cardBackground.cgColor
         frameView.layer?.cornerRadius = cornerRadius
         frameView.layer?.cornerCurve = .continuous
         frameView.layer?.masksToBounds = true
 
         card.wantsLayer = true
-        card.layer?.backgroundColor = AppStyle.cardBackground.cgColor
         card.addSubview(hostView)
 
         header.title = title
+        applyCardFills()   // 卡片/正文/标题栏的底色：按主题是否「终端透明」分两条路径
         header.onDragStart = { [weak self] event in self?.beginPaneDrag(event) }
         header.onClick = { [weak self] in if let id = self?.paneID { self?.onFocus?(id) } }
         header.onAction = { [weak self] action in self?.onContextAction?(action) }
@@ -226,10 +225,11 @@ final class PaneContainerView: NSView, NSDraggingSource, NSMenuDelegate {
 
         dropOverlay.wantsLayer = true
         dropOverlay.layer?.backgroundColor = NSColor(AppStyle.accent).withAlphaComponent(0.15).cgColor
-        dropOverlay.layer?.cornerRadius = 10
+        dropOverlay.layer?.cornerRadius = cornerRadius   // 高亮与卡片圆角一致
         dropOverlay.layer?.cornerCurve = .continuous
-        dropOverlay.layer?.borderWidth = 2
-        dropOverlay.layer?.borderColor = NSColor(AppStyle.accent).withAlphaComponent(0.85).cgColor
+        // 落点高亮的静态边：克制，无硬线（与「焦点环细环」同一审美）。
+        dropOverlay.layer?.borderWidth = 1.5
+        dropOverlay.layer?.borderColor = NSColor(AppStyle.accent).withAlphaComponent(0.6).cgColor
         dropOverlay.isHidden = true
         addSubview(dropOverlay)   // 顶层，frameView 的兄弟
 
@@ -247,11 +247,11 @@ final class PaneContainerView: NSView, NSDraggingSource, NSMenuDelegate {
     /// Agent 思考起点（nil = 没在思考）：头条右侧亮活计时，每秒走、停止即收。
     func setThinkingSince(_ date: Date?) { header.thinkingSince = date }
 
-    /// 「等你回复」态：头条亮琥珀徽标（agent 卡在确认/提问）。
-    func setAwaitingReply(_ awaiting: Bool) { header.awaitingReply = awaiting }
-
     /// 任务队列长度：>0 时头条显示排队数。
     func setQueuedCount(_ count: Int) { header.queuedCount = count }
+
+    /// OSC 9;4 进度徽标：nil 清除。
+    func setProgress(_ info: PaneProgressInfo?) { header.progress = info }
 
     /// 新 pane 入场：新 tab 保持轻淡入；分屏从分割缝方向打开。
     func animateEntrance(_ motion: PaneEntranceMotion) {
@@ -432,7 +432,13 @@ final class PaneContainerView: NSView, NSDraggingSource, NSMenuDelegate {
     private func layoutCard() {
         // 卡片矩形吸附到物理像素边界：分屏比例/SwiftUI 布局可能给出小数坐标，
         // Metal 终端层落在半像素上会被 GPU 重采样，文字发虚、边缘起锯齿。
-        var inset = bounds.insetBy(dx: gap, dy: gap)
+        guard bounds.width.isFinite, bounds.height.isFinite else { return }
+        var inset = NSRect(
+            x: gap,
+            y: gap,
+            width: max(0, bounds.width - gap * 2),
+            height: max(0, bounds.height - gap * 2)
+        )
         if window != nil {
             inset = backingAlignedRect(inset, options: .alignAllEdgesNearest)
         }
@@ -442,14 +448,17 @@ final class PaneContainerView: NSView, NSDraggingSource, NSMenuDelegate {
                                               cornerWidth: cornerRadius, cornerHeight: cornerRadius,
                                               transform: nil)
         let fb = frameView.bounds
-        header.frame = NSRect(x: 0, y: fb.height - headerH, width: fb.width, height: headerH)
-        card.frame = NSRect(x: 0, y: 0, width: fb.width, height: max(0, fb.height - headerH))
+        let fbWidth = max(0, fb.width)
+        let fbHeight = max(0, fb.height)
+        let headerHeight = min(headerH, fbHeight)
+        header.frame = NSRect(x: 0, y: max(0, fbHeight - headerHeight), width: fbWidth, height: headerHeight)
+        card.frame = NSRect(x: 0, y: 0, width: fbWidth, height: max(0, fbHeight - headerHeight))
         hostView.frame = card.bounds
-        scrollbar.frame = NSRect(x: fb.width - 14, y: 0, width: 14, height: max(0, fb.height - headerH))
+        scrollbar.frame = NSRect(x: max(0, fbWidth - 14), y: 0, width: min(14, fbWidth), height: card.bounds.height)
         if let searchBar, !searchBar.isHidden {
-            let width = min(320, fb.width - 24)
-            searchBar.frame = NSRect(x: fb.width - width - 12,
-                                     y: fb.height - headerH - 32 - 8,
+            let width = min(320, max(0, fbWidth - 24))
+            searchBar.frame = NSRect(x: max(0, fbWidth - width - 12),
+                                     y: max(0, fbHeight - headerHeight - 32 - 8),
                                      width: width, height: 32)
         }
     }
@@ -514,10 +523,31 @@ final class PaneContainerView: NSView, NSDraggingSource, NSMenuDelegate {
         scrollbar.setMetrics(total: total, offset: offset, len: len)
     }
 
+    /// 卡片三层底色：按主题是否「终端透明」分两条路径。
+    /// - 光晕主题（透明）：frame/card 清空，正文 ghostty 0.8 透出后方光晕；磨砂底单独给 header（标题栏仍清晰）。
+    /// - 纯色主题（实底）：frame/card 铺 cardBackground 微玻璃，header **不**独立铺底（靠 frameView，
+    ///   避免在「整窗一色」变体上重新造出异色标题条）。
+    private func applyCardFills() {
+        let theme = AppStyle.theme
+        if theme.terminalTranslucent {
+            frameView.layer?.backgroundColor = .clear
+            card.layer?.backgroundColor = .clear
+            header.layer?.backgroundColor = theme.cardBackground.withAlphaComponent(0.7).cgColor
+        } else {
+            let fill = theme.cardBackground.withAlphaComponent(0.62).cgColor
+            frameView.layer?.backgroundColor = fill
+            card.layer?.backgroundColor = fill
+            header.layer?.backgroundColor = .clear
+        }
+    }
+
     private func applyCardShadow() {
         let theme = AppStyle.theme
         let layer = shadowView.layer
-        layer?.backgroundColor = theme.cardBackground.cgColor   // 给阴影一个实体来源（被 frameView 盖住）
+        // 透明主题：阴影靠 shadowPath，shadowView 不铺底（否则挡住终端透出）；
+        // 纯色主题：shadowView 铺卡底，既是卡体也是阴影源。
+        layer?.backgroundColor = theme.terminalTranslucent ? .clear
+            : theme.cardBackground.withAlphaComponent(0.62).cgColor
         layer?.shadowColor = theme.cardShadowColor.cgColor
         layer?.shadowOpacity = theme.cardShadowOpacity
         layer?.shadowRadius = theme.cardShadowRadius
@@ -526,15 +556,15 @@ final class PaneContainerView: NSView, NSDraggingSource, NSMenuDelegate {
 
     /// 主题热更新：重新套用当前主题色到各层。
     func restyle() {
-        layer?.backgroundColor = NSColor(AppStyle.windowBackground).cgColor
-        frameView.layer?.backgroundColor = AppStyle.cardBackground.cgColor
-        card.layer?.backgroundColor = AppStyle.cardBackground.cgColor
+        layer?.backgroundColor = .clear   // 间隙/画布透明：露出窗口毛玻璃
+        applyCardFills()
         dropOverlay.layer?.backgroundColor = NSColor(AppStyle.accent).withAlphaComponent(0.15).cgColor
-        dropOverlay.layer?.borderColor = NSColor(AppStyle.accent).withAlphaComponent(0.85).cgColor
+        dropOverlay.layer?.borderColor = NSColor(AppStyle.accent).withAlphaComponent(0.6).cgColor
         applyCardShadow()
         updateRing()
         header.needsDisplay = true
         scrollbar.restyle()
+        searchBar?.refreshColors()   // 搜索条若开着也跟随主题热更新（否则停留在旧主题色）
     }
 
     private func updateRing() {
@@ -692,17 +722,17 @@ final class PaneHeaderView: NSView {
         }
     }
     private var thinkingTimer: Timer?
-    /// 「等你回复」：agent 卡在确认/提问，亮琥珀徽标（优先级高于思考计时）。
-    var awaitingReply = false {
-        didSet {
-            guard awaitingReply != oldValue else { return }
-            needsDisplay = true
-        }
-    }
     /// 任务队列长度：>0 时头条显示「队列 n」。
     var queuedCount = 0 {
         didSet {
             guard queuedCount != oldValue else { return }
+            needsDisplay = true
+        }
+    }
+    /// OSC 9;4 进度（构建/下载等长任务）：set 画百分比、indeterminate 画「进行中」、error/pause 变色。
+    var progress: PaneProgressInfo? {
+        didSet {
+            guard progress != oldValue else { return }
             needsDisplay = true
         }
     }
@@ -811,7 +841,9 @@ final class PaneHeaderView: NSView {
 
     override func layout() {
         super.layout()
-        let layout = PaneHeaderControlLayout.layout(headerWidth: bounds.width, controlCount: controlButtons.count)
+        let layout = PaneHeaderControlLayout.layout(
+            headerWidth: bounds.width,
+            controlCount: controlButtons.count)
         let controlsFrame = layout.buttonFrames.reduce(NSRect.null) { partial, frame in
             partial.union(frame)
         }
@@ -855,12 +887,10 @@ final class PaneHeaderView: NSView {
             .font: NSFont.systemFont(ofSize: 11, weight: isActive ? .medium : .regular),
             .foregroundColor: NSColor(isActive ? AppStyle.textSecondary : AppStyle.textTertiary),
         ])
-        // 标题在状态徽标（等回复/思考计时/队列）、放大徽标（若亮）或控制按钮组前截断
+        // 标题在状态徽标（思考计时/队列）、放大徽标（若亮）或控制按钮组前截断
         var titleLimit = zoomBadge.isHidden ? controls.frame.minX : zoomBadge.frame.minX
-        // 「等你回复」徽标优先于思考计时（更需要行动）；计时每秒重绘走表
-        if awaitingReply {
-            titleLimit = drawStatusChip(L("等你回复"), color: NSColor(AppStyle.waitAmber), rightEdge: titleLimit)
-        } else if let since = thinkingSince {
+        // 思考计时每秒重绘走表
+        if let since = thinkingSince {
             titleLimit = drawStatusChip(Self.thinkingText(since: since),
                                         color: NSColor(AppStyle.accent), rightEdge: titleLimit)
         }
@@ -868,6 +898,18 @@ final class PaneHeaderView: NSView {
             titleLimit = drawStatusChip(L("队列 %ld", queuedCount),
                                         color: NSColor(AppStyle.textTertiary), rightEdge: titleLimit,
                                         withDot: false)
+        }
+        // OSC 9;4 进度徽标：与状态徽标共存（进度在更右侧先画会更挤，放最后画在剩余空间）
+        if let progress {
+            let (text, color): (String, NSColor) = {
+                switch progress.state {
+                case .error: return (progress.percent.map { "\($0)%" } ?? L("出错"), NSColor(AppStyle.errorRed))
+                case .pause: return (progress.percent.map { "\($0)%" } ?? L("已暂停"), NSColor(AppStyle.textTertiary))
+                case .indeterminate: return (L("进行中"), NSColor(AppStyle.accent))
+                default: return (progress.percent.map { "\($0)%" } ?? "…", NSColor(AppStyle.accent))
+                }
+            }()
+            titleLimit = drawStatusChip(text, color: color, rightEdge: titleLimit)
         }
         let clip = NSRect(x: titleX, y: 0, width: max(0, titleLimit - titleX - 7), height: bounds.height)
         NSGraphicsContext.saveGraphicsState()

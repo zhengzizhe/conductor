@@ -32,6 +32,31 @@ public struct CodexUsageSnapshot: Sendable, Equatable {
         self.session = session
         self.weekly = weekly
     }
+
+    public var isEmpty: Bool {
+        session == nil && weekly == nil
+    }
+
+    public var allWindows: [(title: String, window: RateWindow)] {
+        var out: [(String, RateWindow)] = []
+        if let session {
+            out.append((L("会话"), RateWindow(
+                title: L("会话"),
+                usedPercent: Double(session.usedPercent),
+                windowMinutes: session.windowSeconds > 0 ? session.windowSeconds / 60 : nil,
+                resetsAt: session.resetAt)))
+        }
+        if let weekly {
+            out.append((L("本周"), RateWindow(
+                title: L("本周"),
+                usedPercent: Double(weekly.usedPercent),
+                windowMinutes: weekly.windowSeconds > 0 ? weekly.windowSeconds / 60 : nil,
+                resetsAt: weekly.resetAt)))
+        }
+        return out
+    }
+
+    public var providerCost: ProviderCostSnapshot? { nil }
 }
 
 public enum CodexUsageError: LocalizedError, Sendable {
@@ -54,6 +79,11 @@ public enum CodexUsageError: LocalizedError, Sendable {
 
 public enum CodexUsageFetcher {
     private static let usageURL = URL(string: "https://chatgpt.com/backend-api/wham/usage")!
+
+    /// 是否存在 Codex 登录凭证（用于决定账号用量区是否展示该 provider）。
+    public static func hasCredentials(env: [String: String] = ProcessInfo.processInfo.environment) -> Bool {
+        FileManager.default.fileExists(atPath: authFileURL(env: env).path)
+    }
 
     public static func fetch(
         env: [String: String] = ProcessInfo.processInfo.environment,

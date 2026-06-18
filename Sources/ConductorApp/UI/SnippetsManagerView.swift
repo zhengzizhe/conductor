@@ -29,24 +29,19 @@ struct SnippetsManagerView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text(L("命令片段"))
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(AppStyle.textPrimary)
+                    ToolsSectionLabel(L("命令片段"))
                     Spacer()
-                    Button {
-                        isCreating = true
-                        editing = Snippet(name: "", command: "")
-                    } label: {
-                        Label(L("新增片段"), systemImage: "plus")
-                            .font(.system(size: 11.5, weight: .medium))
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(AppStyle.accent)
+                    ToolActionButton(
+                        title: L("新增片段"),
+                        systemImage: "plus",
+                        role: .secondary,
+                        height: 26,
+                        fontSize: 11,
+                        horizontalPadding: 10) {
+                            isCreating = true
+                            editing = Snippet(name: "", command: "")
+                        }
                 }
-
-                Text(L("点击片段发送到当前终端；也可在命令面板（⌘K）里直接搜索片段名。命令里写 {{变量}} 发送前会弹窗填值。"))
-                    .font(.system(size: 11))
-                    .foregroundStyle(AppStyle.textTertiary)
 
                 searchField
 
@@ -63,15 +58,19 @@ struct SnippetsManagerView: View {
                 }
 
                 if store.snippets.isEmpty, editing == nil {
-                    Text(L("还没有片段，点右上角「新增片段」创建一个。"))
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(AppStyle.textTertiary)
-                        .padding(.top, 8)
+                    ToolEmptyState(
+                        icon: "text.badge.plus",
+                        title: L("还没有片段"),
+                        detail: L("新增一个常用命令片段。"),
+                        compact: true)
+                    .padding(.top, 8)
                 } else if filtered.isEmpty {
-                    Text(L("没有匹配「%@」的结果", search))
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(AppStyle.textTertiary)
-                        .padding(.top, 8)
+                    ToolEmptyState(
+                        icon: "magnifyingglass",
+                        title: L("没有匹配结果"),
+                        detail: search,
+                        compact: true)
+                    .padding(.top, 8)
                 } else {
                     VStack(spacing: 4) {
                         ForEach(filtered) { snippet in
@@ -128,7 +127,7 @@ struct SnippetsManagerView: View {
         }
         .padding(.horizontal, 9)
         .frame(height: 28)
-        .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(AppStyle.activeFill))
+        .background(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous).fill(AppStyle.activeFill))
     }
 }
 
@@ -194,9 +193,25 @@ private struct SnippetRow: View {
                 Spacer(minLength: 0)
                 if hovering {
                     HStack(spacing: 2) {
-                        iconButton("paperplane", help: L("发送到当前终端"), action: onSend)
-                        iconButton("pencil", help: L("编辑"), action: onEdit)
-                        iconButton("trash", help: L("删除"), destructive: true, action: onDelete)
+                        IconOnlyButton(
+                            systemName: "paperplane",
+                            help: L("发送到当前终端"),
+                            size: 22,
+                            symbolSize: 10,
+                            action: onSend)
+                        IconOnlyButton(
+                            systemName: "pencil",
+                            help: L("编辑"),
+                            size: 22,
+                            symbolSize: 10,
+                            action: onEdit)
+                        IconOnlyButton(
+                            systemName: "trash",
+                            help: L("删除"),
+                            size: 22,
+                            symbolSize: 10,
+                            tint: AppStyle.errorRed,
+                            action: onDelete)
                     }
                     .transition(.opacity)
                 }
@@ -204,7 +219,7 @@ private struct SnippetRow: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
             .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                     .fill(hovering ? AppStyle.hoverFill : AppStyle.activeFill.opacity(0.5)))
             .contentShape(Rectangle())
         }
@@ -212,19 +227,6 @@ private struct SnippetRow: View {
         .opacity(isDragging ? 0.45 : 1)
         .onHover { hovering = $0 }
         .animation(.easeOut(duration: 0.12), value: hovering)
-    }
-
-    private func iconButton(_ icon: String, help: String,
-                            destructive: Bool = false, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(destructive ? Color(red: 0.92, green: 0.34, blue: 0.34) : AppStyle.textSecondary)
-                .frame(width: 22, height: 22)
-                .background(Circle().fill(AppStyle.hoverFill))
-        }
-        .buttonStyle(.plain)
-        .help(help)
     }
 }
 
@@ -244,39 +246,45 @@ private struct SnippetEditor: View {
             Text(isNew ? L("新增片段") : L("编辑片段"))
                 .font(.system(size: 11.5, weight: .semibold))
                 .foregroundStyle(AppStyle.textSecondary)
-            TextField(L("名称（如：提交全部改动）"), text: $snippet.name)
+            TextField(L("名称（如：检查项目状态）"), text: $snippet.name)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
                 .padding(8)
-                .background(RoundedRectangle(cornerRadius: 7).fill(AppStyle.activeFill))
-            TextField(L("命令（如：git commit -m \"{{message}}\"）"), text: $snippet.command, axis: .vertical)
+                .background(RoundedRectangle(cornerRadius: Radius.sm).fill(AppStyle.activeFill))
+            TextField(L("命令（如：git status）"), text: $snippet.command, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12, design: .monospaced))
                 .lineLimit(1...4)
                 .padding(8)
-                .background(RoundedRectangle(cornerRadius: 7).fill(AppStyle.activeFill))
+                .background(RoundedRectangle(cornerRadius: Radius.sm).fill(AppStyle.activeFill))
             Toggle(isOn: $snippet.autoRun) {
-                Text(L("发送后直接执行（关掉则摆在提示符上，可编辑后再回车）"))
+                Text(L("发送后执行"))
                     .font(.system(size: 11))
                     .foregroundStyle(AppStyle.textSecondary)
             }
             .toggleStyle(.checkbox)
+            .help(L("关闭后会先放到提示符上"))
             HStack {
                 Spacer()
-                Button(L("取消"), action: onCancel)
-                    .buttonStyle(.plain)
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(AppStyle.textSecondary)
-                Button(L("保存")) { onSave(snippet) }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 11.5, weight: .semibold))
-                    .foregroundStyle(valid ? AppStyle.accent : AppStyle.textTertiary)
+                ToolActionButton(
+                    title: L("取消"),
+                    role: .secondary,
+                    height: 26,
+                    fontSize: 11,
+                    horizontalPadding: 10,
+                    action: onCancel)
+                ToolActionButton(
+                    title: L("保存"),
+                    role: .primary,
+                    height: 26,
+                    fontSize: 11,
+                    horizontalPadding: 10) {
+                        onSave(snippet)
+                    }
                     .disabled(!valid)
             }
         }
         .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(AppStyle.separator, lineWidth: 1))
+        .toolsCard()
     }
 }

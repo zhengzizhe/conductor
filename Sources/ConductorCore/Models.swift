@@ -1,3 +1,5 @@
+import Foundation
+
 /// 工作区内的一个 Tab：持有一棵分屏树和当前焦点 pane。
 public struct Tab: Codable, Equatable {
     public var id: TabID
@@ -33,13 +35,24 @@ public struct Workspace: Codable, Equatable {
     public var id: WorkspaceID
     public var name: String
     public var path: String            // 绝对 POSIX 路径
+    /// macOS security-scoped bookmark for user-selected workspaces.
+    /// Kept optional so old persisted state remains readable.
+    public var bookmarkData: Data?
     public var tabs: [Tab]
     public var activeTab: TabID?
 
-    public init(id: WorkspaceID, name: String, path: String, tabs: [Tab], activeTab: TabID?) {
+    public init(
+        id: WorkspaceID,
+        name: String,
+        path: String,
+        bookmarkData: Data? = nil,
+        tabs: [Tab],
+        activeTab: TabID?
+    ) {
         self.id = id
         self.name = name
         self.path = path
+        self.bookmarkData = bookmarkData
         self.tabs = tabs
         self.activeTab = activeTab
     }

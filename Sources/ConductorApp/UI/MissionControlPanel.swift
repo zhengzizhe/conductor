@@ -4,7 +4,7 @@ import ConductorCore
 import SwiftUI
 
 /// Mission Control 任务总览（⌘⇧M）：所有工作区的 pane 实况卡片墙——
-/// 思考计时 / 等你回复 / 完成未读 / 屏幕预览，一眼定位该去哪，点卡片直达。
+/// 思考计时 / 完成未读 / 屏幕预览，一眼定位当前任务状态。
 struct MissionControlView: View {
     @ObservedObject var coordinator: AppCoordinator
     let onClose: () -> Void
@@ -26,23 +26,18 @@ struct MissionControlView: View {
                     .foregroundStyle(AppStyle.textPrimary)
                 summaryChips
                 Spacer()
-                Text(L("点卡片直达 · Esc 关闭"))
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(AppStyle.textTertiary)
             }
-            .padding(.horizontal, 18)
-            .padding(.top, 15)
-            .padding(.bottom, 11)
-
-            Rectangle().fill(AppStyle.separator).frame(height: 1)
+            .padding(.horizontal, Space.md)
+            .padding(.top, Space.md)
+            .padding(.bottom, Space.sm)
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: Space.md) {
                     ForEach(coordinator.visibleWorkspaces, id: \.id) { workspace in
                         workspaceSection(workspace)
                     }
                 }
-                .padding(16)
+                .padding(Space.md)
             }
             .scrollIndicators(.never)
         }
@@ -53,18 +48,14 @@ struct MissionControlView: View {
         .onReceive(refreshTimer) { _ in refreshPreviews() }
     }
 
-    /// 顶部三色小结：思考中 / 等回复 / 完成未读。
+    /// 顶部小结：思考中 / 完成未读。
     @ViewBuilder
     private var summaryChips: some View {
         let thinking = coordinator.thinkingPanes.count
-        let blocked = coordinator.blockedPanes.count
         let done = coordinator.unseenDonePanes.count
         HStack(spacing: 8) {
             if thinking > 0 {
                 chip(count: thinking, label: L("思考中"), color: AppStyle.accent)
-            }
-            if blocked > 0 {
-                chip(count: blocked, label: L("等回复"), color: AppStyle.waitAmber)
             }
             if done > 0 {
                 chip(count: done, label: L("完成未读"), color: AppStyle.doneGreen)
@@ -108,7 +99,6 @@ struct MissionControlView: View {
                         title: coordinator.paneTitles[pane] ?? L("终端"),
                         agentID: coordinator.paneAgents[pane],
                         thinkingSince: coordinator.thinkingSince(for: pane),
-                        blocked: coordinator.blockedPanes[pane],
                         unseenDone: coordinator.unseenDonePanes.contains(pane),
                         queued: coordinator.paneQueues[pane]?.count ?? 0,
                         preview: previews[pane] ?? ""
@@ -153,7 +143,6 @@ private struct MissionControlCard: View {
     let title: String
     let agentID: String?
     let thinkingSince: Date?
-    let blocked: BlockedPaneInfo?
     let unseenDone: Bool
     let queued: Int
     let preview: String
@@ -195,12 +184,6 @@ private struct MissionControlCard: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .topLeading)
-                if let blocked {
-                    Text(blocked.message)
-                        .font(.system(size: 9.5))
-                        .foregroundStyle(AppStyle.waitAmber)
-                        .lineLimit(2)
-                }
                 if queued > 0 {
                     Text(L("队列 %ld", queued))
                         .font(.system(size: 9))
@@ -208,24 +191,23 @@ private struct MissionControlCard: View {
                         .foregroundStyle(AppStyle.textTertiary)
                 }
             }
-            .padding(10)
+            .padding(Space.sm)
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
                     .fill(hovering ? AppStyle.activeFill : AppStyle.hoverFill))
             .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
                     .strokeBorder(borderColor, lineWidth: 1))
-            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .help(L("点击跳到该终端"))
     }
 
-    /// 卡片边框透出状态色：等回复琥珀 > 思考 accent > 完成绿 > 默认。
+    /// 卡片边框透出状态色：思考 accent > 完成绿 > 默认。
     private var borderColor: Color {
-        if blocked != nil { return AppStyle.waitAmber.opacity(0.55) }
         if thinkingSince != nil { return AppStyle.accent.opacity(0.45) }
         if unseenDone { return AppStyle.doneGreen.opacity(0.5) }
         return AppStyle.separator
@@ -233,15 +215,7 @@ private struct MissionControlCard: View {
 
     @ViewBuilder
     private var statusBadge: some View {
-        if blocked != nil {
-            HStack(spacing: 3) {
-                Image(systemName: "hand.raised.fill")
-                    .font(.system(size: 8, weight: .semibold))
-                Text(L("等你回复"))
-                    .font(.system(size: 9, weight: .semibold))
-            }
-            .foregroundStyle(AppStyle.waitAmber)
-        } else if let thinkingSince {
+        if let thinkingSince {
             TimelineView(.periodic(from: .now, by: 1)) { _ in
                 HStack(spacing: 4) {
                     ThinkingIndicator(size: 7)

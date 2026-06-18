@@ -85,7 +85,7 @@ private struct ToastBubble: View {
         .background(
             Capsule().fill(AppStyle.elevated)
                 .overlay(Capsule().strokeBorder(AppStyle.textPrimary.opacity(0.08), lineWidth: 1))
-                .shadow(color: .black.opacity(0.3), radius: 12, y: 4)
+                .shadow(color: .black.opacity(AppStyle.theme.isDark ? 0.45 : 0.18), radius: 12, y: 4)
         )
         .padding(10)
     }

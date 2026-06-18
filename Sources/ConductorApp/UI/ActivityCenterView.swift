@@ -74,29 +74,28 @@ struct ActivityCenterView: View {
                     .foregroundStyle(AppStyle.textPrimary)
                 Spacer()
                 if !log.entries.isEmpty {
-                    Button(L("清空")) { log.clear() }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(AppStyle.textTertiary)
+                    ToolActionButton(
+                        title: L("清空"),
+                        role: .secondary,
+                        height: 23,
+                        fontSize: 10.5,
+                        horizontalPadding: 9) {
+                            log.clear()
+                        }
                 }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
 
-            Rectangle().fill(AppStyle.separator).frame(height: 1)
-
             if log.entries.isEmpty {
-                VStack(spacing: 6) {
-                    Image(systemName: "bell.slash")
-                        .font(.system(size: 18))
-                        .foregroundStyle(AppStyle.textTertiary)
-                    Text(L("还没有完成记录。Agent 跑完任务会记在这里。"))
-                        .font(.system(size: 11))
-                        .foregroundStyle(AppStyle.textTertiary)
-                        .multilineTextAlignment(.center)
-                }
+                ToolEmptyState(
+                    icon: "bell.slash",
+                    title: L("还没有完成记录"),
+                    detail: L("Agent 跑完任务会记在这里。"),
+                    compact: true)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 28)
+                .padding(.horizontal, 12)
+                .padding(.bottom, 12)
             } else {
                 // 30 秒滴答一次，让「x 分钟前」在面板开着时也保持新鲜
                 TimelineView(.periodic(from: .now, by: 30)) { context in

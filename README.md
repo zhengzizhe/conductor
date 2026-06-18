@@ -34,11 +34,13 @@ Conductor 是一个 macOS 多 Agent 终端工作台，用来同时跑 Codex、Cl
 - Apple Silicon：`arm64.dmg`
 - Intel：`x86_64.dmg`
 
-当前版本是 ad-hoc 签名。首次打开如被 macOS 拦截，可以右键 App 选择“打开”，或执行：
+发布包优先使用稳定代码签名，避免 macOS 把每次更新都当成新 App 而反复要求权限。首次打开如被 macOS 拦截，可以右键 App 选择“打开”，或执行：
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/Conductor.app
 ```
+
+本地开发打包前建议先运行一次 `Scripts/make-dev-cert.sh`，再运行 `Scripts/make-app.sh` 或 `Scripts/make-dmg.sh`。这样桌面/文稿/下载、完全磁盘访问和通知授权会跟随稳定签名保留。
 
 ## 构建与运行
 
@@ -48,18 +50,69 @@ xattr -dr com.apple.quarantine /Applications/Conductor.app
 # 1. 拉取预编译的 GhosttyKit.xcframework（约 536MB，不入 git）
 ./Scripts/prepare-ghosttykit.sh
 
-# 2. 构建并运行
-swift run ConductorApp
+# 2. 一次性创建稳定开发签名，然后打包运行
+./Scripts/make-dev-cert.sh
+./Scripts/make-app.sh
+open ./Conductor.app
 ```
 
 `swift test` 运行 ConductorCore 和 ConductorApp 的单元测试。
+
+快速调试也可以用 `swift run ConductorApp`，但裸可执行不具备稳定 App 签名身份，macOS 权限授权不如打包后的 `Conductor.app` 稳定。
+
+### CLI / Socket 控制
+
+Conductor 启动后会监听本机 Unix socket：`~/Library/Application Support/conductor/automation.sock`。开发环境可直接运行：
+
+```bash
+swift run conductorctl ping
+swift run conductorctl pane list
+swift run conductorctl workspace tree --json
+swift run conductorctl pane split --direction down --cwd "$PWD"
+swift run conductorctl screen --scrollback
+swift run conductorctl run codex --cwd "$PWD" --prompt "检查当前改动" --wait
+printf '检查当前改动\n重点看测试缺口\n' | swift run conductorctl run codex --stdin --wait
+swift run conductorctl agent wait p123 --json
+swift run conductorctl events --jsonl
+```
+
+workspace / tab / pane / status / progress / log 都有正式子命令；完整列表见 `swift run conductorctl --help`。
+
+打包后的 CLI 位于 `Conductor.app/Contents/MacOS/conductorctl`，例如：
+
+```bash
+/Applications/Conductor.app/Contents/MacOS/conductorctl activity --limit 10
+```
+
+批量自动化可走 NDJSON，每行一个 `{"id":1,"method":"app.status","params":{...}}` 请求：
+
+```bash
+printf '{"id":1,"method":"app.ping"}\n{"id":2,"method":"pane.list"}\n' \
+  | swift run conductorctl batch
+```
+
+需要给非 Unix-socket 客户端接入时，可以启动本机 HTTP/WebSocket bridge：
+
+```bash
+swift run conductorctl bridge --host 127.0.0.1 --port 17373
+```
+
+bridge 提供 `POST /rpc`、`POST /batch`、`GET /methods`、`GET /openapi.json`、`WS /rpc`、`WS /events` 和 `GET /events` SSE。HTTP 接口支持 CORS/OPTIONS；`/events` 支持 `limit` 与 `interval` 查询参数。
+
+CLI / socket / bridge 的脚本化回归测试：
+
+```bash
+./Scripts/test-conductorctl.sh
+```
 
 ### 打包成 .app
 
 系统通知、bundle id 和部分 macOS 集成需要用打包后的 `Conductor.app` 运行，而不是 `swift run`：
 
 ```bash
-./Scripts/make-app.sh && open Conductor.app
+./Scripts/make-dev-cert.sh
+./Scripts/make-app.sh
+open ./Conductor.app
 ```
 
 首次运行后，可以在右侧工具面板的 CLI / Hooks 区域安装完成通知 hook。安装后 agent 完成、等待确认或需要关注时，会通过 conductor 的 pane id 跳回对应终端。
@@ -98,6 +151,10 @@ swift run ConductorApp
 libghostty 终端视图基于 `CAMetalLayer`。终端容器里不能放非 Metal 的 layer-backed 兄弟视图，父级也不能重写 `draw()`，否则可能破坏 Metal 呈现导致非聚焦 pane 白屏。
 
 因此 pane 容器只承载终端视图本身，焦点环和 chrome 另行处理。
+
+## 贡献者
+
+- [tobemonkey](https://github.com/tobemonkey)（demoy）—— 提供可配置 AI 会话类型、工作区右键创建 AI 会话和 tab 加号悬浮菜单。
 
 ## 友情链接
 

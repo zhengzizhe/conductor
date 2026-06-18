@@ -82,7 +82,25 @@ final class AgentSessionLocatorTests: XCTestCase {
         XCTAssertEqual(
             AgentSessionRef(agent: "codex", sessionID: "xyz").resumeCommand,
             "codex resume xyz")
-        XCTAssertNil(AgentSessionRef(agent: "gemini", sessionID: "n").resumeCommand)
+        XCTAssertEqual(
+            AgentSessionRef(agent: "gemini", sessionID: "n").resumeCommand,
+            "gemini --resume n")
+        XCTAssertEqual(
+            AgentSessionRef(agent: "cursor", sessionID: "cur-1").resumeCommand,
+            "cursor-agent --resume cur-1")
+        XCTAssertEqual(
+            AgentSessionRef(agent: "copilot", sessionID: "gh-1").resumeCommand,
+            "copilot --resume gh-1")
+        XCTAssertEqual(
+            AgentSessionRef(agent: "grok", sessionID: "grok-1").resumeCommand,
+            "grok -r grok-1")
+        XCTAssertEqual(
+            AgentSessionRef(agent: "opencode", sessionID: "open-1").resumeCommand,
+            "opencode --session open-1")
+        XCTAssertEqual(
+            AgentSessionRef(agent: "amp", sessionID: "amp-1").resumeCommand,
+            "amp threads continue amp-1")
+        XCTAssertNil(AgentSessionRef(agent: "aider", sessionID: "n").resumeCommand)
     }
 
     func testLocateUnsupportedAgentReturnsNil() {

@@ -32,19 +32,4 @@ final class PersistedStateTests: XCTestCase {
         XCTAssertEqual(decoded, original)
     }
 
-    /// v1 文件没有 paneCwds / paneSessions 字段：必须正常解码（按空处理），不能进坏文件恢复流程。
-    func testDecodingV1FileWithoutPaneCwds() throws {
-        let v1 = PersistedState(version: 1, store: sampleStore())
-        var json = try JSONSerialization.jsonObject(
-            with: JSONEncoder().encode(v1)) as! [String: Any]
-        json.removeValue(forKey: "paneCwds")
-        json.removeValue(forKey: "paneSessions")
-        let data = try JSONSerialization.data(withJSONObject: json)
-
-        let decoded = try JSONDecoder().decode(PersistedState.self, from: data)
-        XCTAssertEqual(decoded.version, 1)
-        XCTAssertEqual(decoded.store, v1.store)
-        XCTAssertTrue(decoded.paneCwds.isEmpty)
-        XCTAssertTrue(decoded.paneSessions.isEmpty)
-    }
 }

@@ -2,6 +2,7 @@ import Foundation
 
 /// 持有 PaneID→TerminalSurface 的映射，并把 SessionEffect 翻译成真实生命周期调用。
 /// 泛型/可注入工厂，使其在 ConductorCore 中可用 FakeSurface 单测；app 注入 GhosttySurface 工厂。
+@MainActor
 public final class SessionRegistry {
     private var surfaces: [PaneID: TerminalSurface] = [:]
     private let factory: (PaneID) -> TerminalSurface

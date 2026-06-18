@@ -77,6 +77,13 @@ struct ConfigLoader {
       scrollback: 60000
       copyOnSelect: false
       confirmCloseRunning: true
+      autoResumeAgentSessions: true
+      # AI Agent 会话入口。留空 = 使用自动检测结果；也可以在设置里扫描/手动添加。
+      aiAgents: []
+      # - id: codex
+      #   title: Codex CLI
+      #   command: codex
+      #   enabled: true
 
     behavior:
       restoreLayoutOnLaunch: true
@@ -107,6 +114,10 @@ struct ConfigLoader {
     workspaceDefaults:
       shell: null
       startupCommand: null
+
+    # 账号用量 provider 设置。默认空配置；在 CLI 面板里启用、填 key 或调整来源后会写入。
+    usage:
+      providers: {}
 
     """
 }

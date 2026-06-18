@@ -25,13 +25,4 @@ public struct PersistedState: Codable, Equatable {
         self.paneSessions = paneSessions
     }
 
-    /// 兼容旧文件（无 paneCwds / paneSessions 字段）：缺字段按空处理，不触发坏文件恢复。
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        version = try container.decode(Int.self, forKey: .version)
-        store = try container.decode(WorkspaceStore.self, forKey: .store)
-        paneCwds = try container.decodeIfPresent([String: String].self, forKey: .paneCwds) ?? [:]
-        paneSessions = try container.decodeIfPresent(
-            [String: AgentSessionRef].self, forKey: .paneSessions) ?? [:]
-    }
 }

@@ -2,6 +2,7 @@ import Foundation
 @testable import ConductorCore
 
 /// TerminalSurface 的测试替身：记录调用，并允许测试手动触发回调。
+@MainActor
 final class FakeSurface: TerminalSurface {
     private(set) var startedCwd: URL?
     private(set) var focusCount = 0

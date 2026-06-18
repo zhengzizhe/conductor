@@ -1,24 +1,57 @@
 import Foundation
 
-/// 某个 pane 里 agent 的可恢复会话引用：恢复 pane 时把 resume 命令预输入到提示符。
+/// 某个 pane 里 agent 的可恢复会话引用：恢复 pane 时生成原生 resume 命令。
 public struct AgentSessionRef: Codable, Equatable, Sendable {
-    /// agent id（"claude" / "codex"）。
+    /// agent id（"claude" / "codex" / "gemini" ...）。
     public var agent: String
     public var sessionID: String
+    /// 会话最后所在目录。hook 有上报时优先保存，用于恢复后定位。
+    public var cwd: String?
+    /// 原生会话日志路径。用于后续预览/排错；恢复命令不依赖它。
+    public var transcriptPath: String?
+    /// hook 最后一次确认这个会话的时间。
+    public var updatedAt: Date?
+    /// 退出时该 pane 是否还在跑 agent。true 时可按配置自动续聊；false/nil 时只预填命令。
+    public var wasRunning: Bool?
+    /// hook 生命周期：running / idle / needsInput / unknown。用于恢复策略与未来休眠。
+    public var lifecycle: AgentSessionLifecycle?
+    /// 安全净化后的启动命令，只保留恢复相关 flag，避免把 prompt/密钥写进恢复命令。
+    public var launchCommand: AgentLaunchCommandSnapshot?
 
-    public init(agent: String, sessionID: String) {
+    public init(
+        agent: String,
+        sessionID: String,
+        cwd: String? = nil,
+        transcriptPath: String? = nil,
+        updatedAt: Date? = nil,
+        wasRunning: Bool? = nil,
+        lifecycle: AgentSessionLifecycle? = nil,
+        launchCommand: AgentLaunchCommandSnapshot? = nil
+    ) {
         self.agent = agent
         self.sessionID = sessionID
+        self.cwd = cwd
+        self.transcriptPath = transcriptPath
+        self.updatedAt = updatedAt
+        self.wasRunning = wasRunning
+        self.lifecycle = lifecycle
+        self.launchCommand = launchCommand
     }
 
     /// 续聊命令。未知 agent 返回 nil。
     public var resumeCommand: String? {
-        switch agent {
-        case "claude": return "claude --resume \(sessionID)"
-        case "codex": return "codex resume \(sessionID)"
-        default: return nil
-        }
+        AgentLaunchCommandSanitizer.resumeCommand(
+            agent: agent,
+            sessionID: sessionID,
+            launchCommand: launchCommand)
     }
+}
+
+public enum AgentSessionLifecycle: String, Codable, Equatable, Sendable {
+    case running
+    case idle
+    case needsInput
+    case unknown
 }
 
 /// 按 cwd 定位 claude / codex 最近一次会话的 ID（纯启发式）：

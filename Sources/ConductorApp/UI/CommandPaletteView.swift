@@ -96,8 +96,6 @@ struct CommandPaletteView: View {
             .padding(.horizontal, 16)
             .frame(height: 52)
 
-            Rectangle().fill(AppStyle.separator).frame(height: 1)
-
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 2) {
@@ -160,19 +158,15 @@ struct CommandPaletteView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
         .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                 .fill(selected ? AppStyle.activeFill : Color.clear))
     }
 
     private var emptyState: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 24))
-                .foregroundStyle(AppStyle.textTertiary)
-            Text(L("没有匹配「%@」的结果", query))
-                .font(.system(size: 13))
-                .foregroundStyle(AppStyle.textTertiary)
-        }
+        ToolEmptyState(
+            icon: "magnifyingglass",
+            title: L("没有匹配「%@」的结果", query),
+            compact: true)
         .frame(maxWidth: .infinity)
         .padding(.vertical, 28)
     }

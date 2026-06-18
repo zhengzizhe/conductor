@@ -9,7 +9,7 @@ final class SettingsNavigationTests: XCTestCase {
     func testTopLevelSectionsHaveStableOrder() {
         XCTAssertEqual(
             SettingsSectionID.allCases.map(\.title),
-            ["外观", "终端", "高级", "行为", "快捷键"]
+            ["外观", "终端", "高级", "行为", "伙伴", "快捷键"]
         )
     }
 }

@@ -86,7 +86,7 @@ final class SnippetStore: ObservableObject {
     private func load() {
         guard let data = try? Data(contentsOf: Self.fileURL),
               let decoded = try? JSONDecoder().decode([Snippet].self, from: data) else {
-            snippets = Self.starterPack
+            snippets = []
             return
         }
         snippets = decoded
@@ -103,12 +103,4 @@ final class SnippetStore: ObservableObject {
         }
     }
 
-    /// 首次使用的示例片段（用户可改可删），展示「直接执行」与「摆在提示符」两种用法。
-    private static var starterPack: [Snippet] {
-        [
-            Snippet(name: L("Git 状态"), command: "git status", autoRun: true),
-            Snippet(name: L("Git 最近提交"), command: "git log --oneline -10", autoRun: true),
-            Snippet(name: L("提交全部改动"), command: "git add -A && git commit -m \"\"", autoRun: false),
-        ]
-    }
 }

@@ -45,7 +45,8 @@ final class PaneScrollbar: NSView {
     func restyle() { applyColor() }
 
     private func applyColor() {
-        thumb.backgroundColor = (AppStyle.theme.isDark ? NSColor.white : NSColor.black)
+        // 从中性文本 token 派生（替代裸 white/black），仍随主题深浅自适应，alpha 行为不变。
+        thumb.backgroundColor = NSColor(AppStyle.textTertiary)
             .withAlphaComponent(hovering || dragging ? 0.42 : 0.26).cgColor
     }
 

@@ -1,4 +1,5 @@
 import AppKit
+import ConductorCore
 import Foundation
 import UserNotifications
 
@@ -14,6 +15,11 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
 
     /// 点击通知后请求聚焦的 pane（paneID 字符串）。由 AppCoordinator 注入。
     var onActivatePane: ((String) -> Void)?
+
+    /// 每条通知的旁路出口（原始 paneID/title/body，未清洗）——给桌宠等消费者用来
+    /// 显示「AI 会话通知」的真实内容（系统通知本身仍走清洗后的 title/body）。
+    /// `@MainActor`：调用方编译期就被钉在主线程，消费者无需 `assumeIsolated`（那是会崩的硬前置）。
+    var onNotify: (@MainActor (_ paneID: String?, _ title: String, _ body: String) -> Void)?
 
     /// 是否有 bundle id（能用 UNUserNotificationCenter）。
     private var hasBundle = false
@@ -49,7 +55,18 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     }
 
     /// 发送一条通知。优先富通知（带 paneID 用于点击跳转），否则回退 osascript 横幅。
-    func notify(paneID: String?, title: String, body: String) {
+    /// 文案统一清洗：标题截断；body 若是成段内容（agent 把整段回复经 OSC 塞进来）
+    /// 则换成通用提示——内容本身留在终端和活动账本里，通知只负责提醒。
+    func notify(paneID: String?, title rawTitle: String, body rawBody: String,
+                bodyFallback: String? = nil) {
+        onNotify?(paneID, rawTitle, rawBody)   // 旁路：桌宠拿原始内容显示真实会话通知
+        // 系统横幅：系统通知开则发；系统关但伙伴开且宠物隐藏 → 回退横幅别丢通知；都关 → 静默。
+        let companion = ConfigStore.shared.config.companion
+        guard CompanionConfig.shouldDeliverSystemBanner(
+            notifySystem: companion.notifySystem, notifyPet: companion.notifyPet,
+            petVisible: companion.enabled) else { return }
+        let title = NotificationText.title(rawTitle)
+        let body = NotificationText.body(rawBody, fallback: bodyFallback ?? L("有新结果，点击查看"))
         if canDeliverRich {
             let content = UNMutableNotificationContent()
             content.title = title

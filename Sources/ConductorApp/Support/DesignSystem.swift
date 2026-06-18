@@ -168,37 +168,248 @@ struct ToolsSectionLabel: View {
     }
 }
 
+enum ToolBadgeStyle {
+    case soft
+    case solid
+    case muted
+}
+
+struct ToolBadge: View {
+    let text: String
+    var icon: String?
+    var color: Color = AppStyle.textTertiary
+    var style: ToolBadgeStyle = .soft
+    var height: CGFloat = 20
+
+    var body: some View {
+        HStack(spacing: 4) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 9, weight: .bold))
+            }
+            Text(text)
+                .font(.system(size: 9.5, weight: .semibold))
+                .lineLimit(1)
+        }
+        .foregroundStyle(foreground)
+        .padding(.horizontal, 6)
+        .frame(height: height)
+        .background(Capsule().fill(background))
+    }
+
+    private var foreground: Color {
+        switch style {
+        case .solid: .white
+        case .soft: color
+        case .muted: AppStyle.textTertiary
+        }
+    }
+
+    private var background: Color {
+        switch style {
+        case .solid: color
+        case .soft: color.opacity(0.13)
+        case .muted: AppStyle.hoverFill.opacity(0.7)
+        }
+    }
+}
+
+enum ToolActionRole {
+    case primary
+    case secondary
+    case tinted(Color)
+    case destructive
+}
+
+struct ToolActionButton: View {
+    let title: String
+    var systemImage: String?
+    var role: ToolActionRole = .secondary
+    var height: CGFloat = 27
+    var fontSize: CGFloat = 11.5
+    var horizontalPadding: CGFloat = 12
+    var help: String?
+    var action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: systemImage == nil ? 0 : 5) {
+                if let systemImage {
+                    Image(systemName: systemImage)
+                        .font(.system(size: fontSize - 1, weight: .semibold))
+                }
+                Text(title)
+                    .font(.system(size: fontSize, weight: .semibold))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(foreground)
+            .padding(.horizontal, horizontalPadding)
+            .frame(height: height)
+            .background(Capsule().fill(background))
+            .overlay(Capsule().strokeBorder(border, lineWidth: 1))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(PressScaleStyle())
+        .help(help ?? title)
+        .onHover { hovering = $0 }
+        .animation(Motion.hover, value: hovering)
+    }
+
+    private var foreground: Color {
+        switch role {
+        case .primary:
+            AppStyle.theme.primarySolidText
+        case .secondary:
+            AppStyle.textSecondary
+        case let .tinted(color):
+            color
+        case .destructive:
+            AppStyle.errorRed
+        }
+    }
+
+    private var background: Color {
+        switch role {
+        case .primary:
+            AppStyle.theme.primarySolid
+        case .secondary:
+            AppStyle.hoverFill.opacity(hovering ? 1 : 0.82)
+        case let .tinted(color):
+            color.opacity(hovering ? 0.16 : 0.11)
+        case .destructive:
+            AppStyle.errorRed.opacity(hovering ? 0.16 : 0.10)
+        }
+    }
+
+    private var border: Color {
+        switch role {
+        case .primary:
+            Color.white.opacity(AppStyle.theme.isDark ? 0.14 : 0)
+        case .secondary:
+            AppStyle.separator.opacity(hovering ? 0.8 : 0.45)
+        case let .tinted(color):
+            color.opacity(hovering ? 0.22 : 0)
+        case .destructive:
+            AppStyle.errorRed.opacity(hovering ? 0.22 : 0)
+        }
+    }
+}
+
+struct ToolEmptyState: View {
+    let icon: String
+    let title: String
+    var detail: String?
+    var compact = false
+
+    var body: some View {
+        VStack(alignment: compact ? .center : .leading, spacing: compact ? 8 : 8) {
+            Image(systemName: icon)
+                .font(.system(size: compact ? 17 : 18, weight: .semibold))
+                .foregroundStyle(AppStyle.textTertiary)
+            Text(title)
+                .font(.system(size: compact ? 11.5 : 12.5, weight: .semibold))
+                .foregroundStyle(compact ? AppStyle.textSecondary : AppStyle.textPrimary)
+            if let detail {
+                Text(detail)
+                    .font(.system(size: 11))
+                    .foregroundStyle(AppStyle.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: compact ? .center : .leading)
+        .padding(compact ? 0 : 14)
+        .frame(minHeight: compact ? 92 : nil)
+        .background {
+            if compact {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(AppStyle.hoverFill.opacity(0.45))
+            }
+        }
+    }
+}
+
+struct ToolStatusLine: View {
+    let icon: String
+    let text: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .semibold))
+            Text(text)
+                .font(.system(size: 11))
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(color)
+        .padding(.horizontal, 10)
+        .frame(minHeight: 30)
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(color.opacity(0.10)))
+    }
+}
+
+/// 工具面板卡片内部的轻分组。用于替代硬 Divider，让详情信息像同一块面板里的延展层。
+struct ToolSoftGroup<Content: View>: View {
+    let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        content
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 8)
+            .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(AppStyle.hoverFill.opacity(0.36)))
+    }
+}
+
 /// 主操作按钮：高对比石墨实心胶囊（深色→近白，浅色→近黑）。全屏只该有一个。
 struct PrimaryButtonStyle: ButtonStyle {
+    var height: CGFloat = 32
+    var horizontalPadding: CGFloat = Space.md
+    var fontSize: CGFloat = 13
+    var weight: Font.Weight = .semibold
     @MainActor private var theme: Theme { AppStyle.theme }
 
     func makeBody(configuration: Configuration) -> some View {
+        let shape = Capsule()
         configuration.label
-            .font(.system(size: 13, weight: .semibold))
+            .font(.system(size: fontSize, weight: weight))
             .foregroundStyle(theme.primarySolidText)
-            .padding(.horizontal, Space.md)
-            .frame(height: 32)
-            .background(Capsule().fill(theme.primarySolid))
+            .padding(.horizontal, horizontalPadding)
+            .frame(height: height)
+            .background(shape.fill(theme.primarySolid))
+            .contentShape(shape)
             .opacity(configuration.isPressed ? 0.82 : 1)
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
+            .animation(Motion.hover, value: configuration.isPressed)
     }
 }
 
 /// 次操作按钮：低对比描边胶囊，让位给主操作。
 struct SecondaryButtonStyle: ButtonStyle {
+    var height: CGFloat = 32
+    var horizontalPadding: CGFloat = Space.md
+    var fontSize: CGFloat = 13
+    var weight: Font.Weight = .medium
     @MainActor private var theme: Theme { AppStyle.theme }
 
     func makeBody(configuration: Configuration) -> some View {
+        let shape = Capsule()
         configuration.label
-            .font(.system(size: 13, weight: .medium))
+            .font(.system(size: fontSize, weight: weight))
             .foregroundStyle(theme.textPrimary)
-            .padding(.horizontal, Space.md)
-            .frame(height: 32)
-            .background(Capsule().fill(theme.isDark ? Color.white.opacity(0.07) : Color.black.opacity(0.045)))
-            .overlay(Capsule().strokeBorder(theme.isDark ? Color.white.opacity(0.09) : Color.black.opacity(0.07), lineWidth: 1))
-            .opacity(configuration.isPressed ? 0.7 : 1)
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
+            .padding(.horizontal, horizontalPadding)
+            .frame(height: height)
+            .background(shape.fill(theme.isDark ? Color.white.opacity(0.065) : Color.black.opacity(0.045)))
+            .overlay(shape.strokeBorder(theme.isDark ? Color.white.opacity(0.09) : Color.black.opacity(0.07), lineWidth: 1))
+            .contentShape(shape)
+            .opacity(configuration.isPressed ? 0.72 : 1)
+            .animation(Motion.hover, value: configuration.isPressed)
     }
 }

@@ -1,0 +1,82 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - '*.*.*'
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-publish:
+    runs-on: macos-15
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+    steps:
+      - name: Check out release ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - name: Show toolchain
+        run: |
+          xcode-select -p
+          swift --version
+
+      - name: Build DMGs
+        run: |
+          VERSION="${RELEASE_TAG#v}" Scripts/make-dmg.sh arm64 x86_64
+
+      - name: Verify artifacts
+        run: |
+          hdiutil verify "dist/Conductor-${RELEASE_TAG#v}-arm64.dmg"
+          hdiutil verify "dist/Conductor-${RELEASE_TAG#v}-x86_64.dmg"
+          codesign --verify --deep --strict --verbose=2 dist/arm64/Conductor.app
+          codesign --verify --deep --strict --verbose=2 dist/x86_64/Conductor.app
+          shasum -a 256 "dist/Conductor-${RELEASE_TAG#v}-arm64.dmg" "dist/Conductor-${RELEASE_TAG#v}-x86_64.dmg" > dist/checksums.txt
+
+      - name: Write release notes
+        run: |
+          {
+            echo "## Highlights"
+            echo
+            echo "- Added a desktop Companion pet that ambiently reflects agent state — thinking, done, needs-approval, error — in the screen corner."
+            echo "- Inline approve/deny right from the pet's bubble, sharing the same Feed approval engine as the side panel."
+            echo "- Companion settings: enable, nickname, dock corner, speech bubbles, and separate Companion / System notification toggles (config-driven, no hook install needed)."
+            echo "- Codex Pets sprite-sheet support: drop an 8x9 pet bundle into ~/.config/conductor/pets/ (openpets-compatible), plus built-in pets."
+            echo "- Full English/Chinese localization for the Companion surface."
+            echo
+            echo "## Assets"
+            echo
+            echo "- Apple Silicon: \`Conductor-${RELEASE_TAG#v}-arm64.dmg\`"
+            echo "- Intel: \`Conductor-${RELEASE_TAG#v}-x86_64.dmg\`"
+            echo
+            echo "## Checksums"
+            echo
+            echo "\`\`\`text"
+            cat dist/checksums.txt
+            echo "\`\`\`"
+          } > release-notes.md
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${RELEASE_TAG#v}"
+          assets=(
+            "dist/Conductor-${VERSION}-arm64.dmg"
+            "dist/Conductor-${VERSION}-x86_64.dmg"
+          )
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
+            gh release edit "$RELEASE_TAG" --title "Conductor ${RELEASE_TAG}" --notes-file release-notes.md
+          else
+            gh release create "$RELEASE_TAG" "${assets[@]}" --verify-tag --title "Conductor ${RELEASE_TAG}" --notes-file release-notes.md
+          fi

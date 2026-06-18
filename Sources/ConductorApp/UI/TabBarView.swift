@@ -13,6 +13,11 @@ struct TabBarView: View {
     @FocusState private var renameFocused: Bool
     /// 胶囊串的内容宽度：tab 少时滚动区收身到正好包住内容，把剩余宽度让给拖拽区。
     @State private var pillsWidth: CGFloat = 0
+    @State private var showingAgentMenu = false
+    @State private var isHoveringPlus = false
+    @State private var isHoveringAgentMenu = false
+    @State private var agentMenuOpenWorkItem: DispatchWorkItem?
+    @State private var agentMenuCloseWorkItem: DispatchWorkItem?
     @State private var isFeedbackPresented = false
 
     var body: some View {
@@ -47,7 +52,7 @@ struct TabBarView: View {
                     .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { pillsWidth = $0 }
                 }
                 .scrollBounceBehavior(.basedOnSize, axes: [.horizontal])
-                .frame(maxWidth: pillsWidth > 0 ? pillsWidth : nil)
+                .frame(maxWidth: tabs.isEmpty ? 0 : (pillsWidth > 0 ? pillsWidth : nil))
                 .layoutPriority(2)
                 .onChange(of: activeTab) { _, id in
                     guard let id else { return }
@@ -55,59 +60,92 @@ struct TabBarView: View {
                 }
                 .onAppear { if let activeTab { proxy.scrollTo(activeTab) } }
             }
-            Button(action: { coordinator.newTab() }) {
-                Image(systemName: "plus").font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(AppStyle.textTertiary)
+            IconOnlyButton(
+                systemName: "plus",
+                help: L("新建标签"),
+                size: 24,
+                symbolSize: 12,
+                tint: AppStyle.textTertiary) {
+                    cancelAgentMenuTimers()
+                    showingAgentMenu = false
+                    coordinator.newTab()
+                }
+            .onHover { inside in
+                isHoveringPlus = inside
+                updateAgentMenuVisibility()
             }
-            .buttonStyle(IconButtonStyle(size: 24))
+            .popover(isPresented: $showingAgentMenu, arrowEdge: .top) {
+                AIAgentSessionHoverMenu(
+                    agents: coordinator.launchableAgents,
+                    onLaunch: { agent in
+                        cancelAgentMenuTimers()
+                        showingAgentMenu = false
+                        coordinator.launchAIAgentSession(agent)
+                    },
+                    onHover: { inside in
+                        isHoveringAgentMenu = inside
+                        updateAgentMenuVisibility()
+                    }
+                )
+            }
             WindowDragZoomArea()
             .frame(minWidth: 56, maxWidth: .infinity)   // tab 再多也给窗口拖拽留一块
             .frame(height: WindowDragZoomRegion.preferredHeight)
             .layoutPriority(1)
             HStack(spacing: 6) {
-                Button(action: { coordinator.openTools(.coCreate) }) {
-                    Text(L("共享计划"))
-                        .font(.system(size: 11.5, weight: .semibold))
-                        .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
-                }
-                .buttonStyle(SharePlanButtonStyle(isSelected: coordinator.cliToolsPresentation.isPresented && coordinator.toolsTab == .coCreate))
-                .help(L("打开共享计划"))
+                UpdateButton()
 
                 // 右侧快捷按钮组（软圆角容器，对标 Craft 的按钮组）
                 HStack(spacing: 2) {
-                    Button(action: { isFeedbackPresented = true }) {
-                        Image(systemName: "text.bubble")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(AppStyle.textSecondary)
-                    }
-                    .buttonStyle(IconButtonStyle(size: 26))
-                    .help(L("反馈"))
-                    Button(action: { coordinator.toggleTheme() }) {
-                        Image(systemName: AppStyle.theme.isDark ? "moon.stars.fill" : "sun.max.fill")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(AppStyle.textSecondary)
-                    }
-                    .buttonStyle(IconButtonStyle(size: 26))
-                    .help(L("切换深/浅主题"))
-                    Button(action: { coordinator.toggleCLITools() }) {
-                        Image(systemName: "wand.and.stars")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(coordinator.cliToolsPresentation.isPresented ? AppStyle.accent : AppStyle.textSecondary)
-                    }
-                    .buttonStyle(IconButtonStyle(size: 26))
-                    .help(L("检测命令行工具"))
-                    Button(action: { coordinator.openSettings() }) {
-                        Image(systemName: "gearshape")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(coordinator.settingsPresentation.isPresented ? AppStyle.accent : AppStyle.textSecondary)
-                    }
-                    .buttonStyle(IconButtonStyle(size: 26))
-                    .help(L("设置"))
+                Button(action: { isFeedbackPresented = true }) {
+                                        Image(systemName: "text.bubble")
+                                            .font(.system(size: 12, weight: .medium))
+                                            .foregroundStyle(AppStyle.textSecondary)
+                                    }
+                                    .buttonStyle(IconButtonStyle(size: 26))
+                                    .help(L("反馈"))
+                    IconOnlyButton(
+                        systemName: AppStyle.theme.isDark ? "moon.stars.fill" : "sun.max.fill",
+                        help: L("切换深/浅主题"),
+                        size: 26,
+                        symbolSize: 12) {
+                            coordinator.toggleTheme()
+                        }
+                    IconOnlyButton(
+                        systemName: "wand.and.stars",
+                        help: L("检测命令行工具"),
+                        size: 26,
+                        symbolSize: 12,
+                        tint: coordinator.cliToolsPresentation.isPresented ? AppStyle.accent : AppStyle.textSecondary) {
+                            coordinator.toggleCLITools()
+                        }
+                    IconOnlyButton(
+                        systemName: "checklist",
+                        help: L("任务卡片"),
+                        size: 26,
+                        symbolSize: 12) {
+                            coordinator.toggleTaskCards()
+                        }
+                    IconOnlyButton(
+                        systemName: "rectangle.3.group",
+                        help: L("打开工具管理台"),
+                        size: 26,
+                        symbolSize: 12,
+                        tint: coordinator.agentToolsManagementPresentation.isPresented ? AppStyle.accent : AppStyle.textSecondary) {
+                            coordinator.openAgentToolsManagement()
+                        }
+                    IconOnlyButton(
+                        systemName: "gearshape",
+                        help: L("设置"),
+                        size: 26,
+                        symbolSize: 12,
+                        tint: coordinator.settingsPresentation.isPresented ? AppStyle.accent : AppStyle.textSecondary) {
+                            coordinator.openSettings()
+                        }
                 }
                 .padding(3)
                 .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
                         .fill(AppStyle.hoverFill))
             }
         }
@@ -117,7 +155,7 @@ struct TabBarView: View {
         .padding(.top, 4)
         .padding(.bottom, 4)
         .frame(maxWidth: .infinity)
-        .background(AppStyle.windowBackground)   // 与终端区同底，无分隔条
+        .background(.clear)   // 透明：用根底统一磨砂
         .sheet(isPresented: $isFeedbackPresented) {
             FeedbackSheetView {
                 isFeedbackPresented = false
@@ -139,37 +177,87 @@ struct TabBarView: View {
         editingTab = nil
         renameFocused = false
     }
+
+    private func updateAgentMenuVisibility() {
+        guard !coordinator.launchableAgents.isEmpty else {
+            cancelAgentMenuTimers()
+            showingAgentMenu = false
+            return
+        }
+
+        if isHoveringAgentMenu {
+            agentMenuCloseWorkItem?.cancel()
+            agentMenuOpenWorkItem?.cancel()
+            showingAgentMenu = true
+        } else if isHoveringPlus {
+            scheduleAgentMenuOpen()
+        } else {
+            scheduleAgentMenuClose()
+        }
+    }
+
+    private func scheduleAgentMenuOpen() {
+        agentMenuCloseWorkItem?.cancel()
+        guard !showingAgentMenu else { return }
+        agentMenuOpenWorkItem?.cancel()
+
+        let workItem = DispatchWorkItem {
+            if isHoveringPlus || isHoveringAgentMenu {
+                showingAgentMenu = true
+            }
+        }
+        agentMenuOpenWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.55, execute: workItem)
+    }
+
+    private func scheduleAgentMenuClose() {
+        agentMenuOpenWorkItem?.cancel()
+        guard !isHoveringPlus && !isHoveringAgentMenu else { return }
+        agentMenuCloseWorkItem?.cancel()
+
+        let workItem = DispatchWorkItem {
+            if !isHoveringPlus && !isHoveringAgentMenu {
+                showingAgentMenu = false
+            }
+        }
+        agentMenuCloseWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22, execute: workItem)
+    }
+
+    private func cancelAgentMenuTimers() {
+        agentMenuOpenWorkItem?.cancel()
+        agentMenuCloseWorkItem?.cancel()
+        agentMenuOpenWorkItem = nil
+        agentMenuCloseWorkItem = nil
+    }
 }
 
-private struct SharePlanButtonStyle: ButtonStyle {
-    let isSelected: Bool
-    @State private var hovering = false
+private struct AIAgentSessionHoverMenu: View {
+    let agents: [LaunchableAgent]
+    let onLaunch: (LaunchableAgent) -> Void
+    let onHover: (Bool) -> Void
 
-    private let accent = Color(red: 0.12, green: 0.63, blue: 0.55)
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .foregroundStyle(AppStyle.theme.isDark ? Color.black.opacity(0.86) : Color.white)
-            .padding(.horizontal, 11)
-            .frame(height: 26)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(accent.opacity(isSelected || hovering ? 1 : 0.88))
-            )
-            .overlay(
-                Capsule(style: .continuous)
-                    .strokeBorder(Color.white.opacity(AppStyle.theme.isDark ? 0.18 : 0.28), lineWidth: 1)
-            )
-            .shadow(
-                color: accent.opacity((isSelected || hovering) ? 0.26 : 0),
-                radius: 7,
-                y: 1
-            )
-            .scaleEffect(configuration.isPressed ? 0.96 : (hovering ? 1.02 : 1))
-            .opacity(configuration.isPressed ? 0.78 : 1)
-            .animation(Motion.hover, value: hovering)
-            .animation(Motion.snappy, value: configuration.isPressed)
-            .onHover { hovering = $0 }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            ForEach(agents) { agent in
+                Button { onLaunch(agent) } label: {
+                    HStack(spacing: 8) {
+                        LaunchableAgentIcon(agent: agent, size: 15)
+                        Text(AIAgentMenuPresentation.sessionTitle(for: agent))
+                            .font(.system(size: 12.5, weight: .medium))
+                            .foregroundStyle(AppStyle.textPrimary)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 9)
+                    .frame(width: 190, height: 30, alignment: .leading)
+                    .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(6)
+        .background(AppStyle.windowBackground)
+        .onHover(perform: onHover)
     }
 }
 
@@ -310,7 +398,7 @@ private struct TabPill: View {
             if isGroup, !isEditing {
                 Text("\(tab.paneCount)")
                     .font(.system(size: 9.5, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(AppStyle.theme.primarySolidText)
                     .contentTransition(.numericText())
                     .frame(minWidth: 16, minHeight: 16)
                     .background(Circle().fill(Color(AppStyle.accent).opacity(selected ? 1 : 0.7)))
@@ -319,18 +407,16 @@ private struct TabPill: View {
             Color.clear.frame(width: 15, height: 15)   // 预留 X 位
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.62), value: tab.paneCount)
-        .padding(.horizontal, 9)
-        .padding(.vertical, 4)
+        .padding(.horizontal, 11)
+        .padding(.vertical, 5)
         .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(selected ? AnyShapeStyle(AppStyle.elevated)
+            RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                .fill(selected ? AnyShapeStyle(AppStyle.accent.opacity(0.14))
                                : (hovering ? AnyShapeStyle(AppStyle.hoverFill) : AnyShapeStyle(Color.clear)))
-                .shadow(color: (selected && !AppStyle.theme.isDark) ? Color.black.opacity(0.05) : .clear,
-                        radius: 1.5, y: 0.5)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(selected ? AppStyle.separator : Color.clear, lineWidth: 1)
+            RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                .strokeBorder(selected ? AppStyle.accent.opacity(0.38) : Color.clear, lineWidth: 1)
         )
         .contentShape(Rectangle())
     }
@@ -363,7 +449,7 @@ private struct TabPill: View {
         Button(action: { coordinator.closeTab(tab.id) }) {
             Image(systemName: "xmark")
                 .font(.system(size: 8, weight: .bold))
-                .foregroundStyle(closeHovering ? Color.white : AppStyle.textSecondary)
+                .foregroundStyle(closeHovering ? AppStyle.theme.primarySolidText : AppStyle.textSecondary)
                 .frame(width: 16, height: 16)
                 .background(Circle().fill(closeHovering ? AppStyle.accent.opacity(0.9) : AppStyle.hoverFill))
                 .contentShape(Circle())

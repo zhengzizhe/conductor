@@ -2,6 +2,7 @@ import XCTest
 import Foundation
 @testable import ConductorCore
 
+@MainActor
 final class TerminalSurfaceTests: XCTestCase {
     func testFakeRecordsLifecycle() {
         let surface = FakeSurface()

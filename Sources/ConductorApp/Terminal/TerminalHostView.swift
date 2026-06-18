@@ -2,6 +2,12 @@ import AppKit
 import QuartzCore
 @preconcurrency import GhosttyKit
 
+private extension CGSize {
+    var isFinitePositiveArea: Bool {
+        width.isFinite && height.isFinite && width > 1 && height > 1
+    }
+}
+
 /// 承载一个 libghostty surface 的 NSView：CAMetalLayer 背衬。
 /// 自身不直接调 libghostty——把生命周期/几何/输入都委托给 `owner`（GhosttySurface）。
 @MainActor
@@ -28,12 +34,20 @@ final class TerminalHostView: NSView {
         let layer = CAMetalLayer()
         layer.framebufferOnly = false
         layer.isOpaque = true
-        layer.backgroundColor = AppStyle.cardBackground.cgColor
+        layer.backgroundColor = GhosttyRuntime.terminalBackgroundColor(for: ConfigStore.shared.config).cgColor
         layer.masksToBounds = true
-        layer.cornerRadius = 12              // 与卡片圆角一致
+        layer.cornerRadius = Radius.md       // 与卡片圆角一致
         layer.cornerCurve = .continuous
         configureLayer(layer)
         return layer
+    }
+
+    func refreshThemeBackground() {
+        refreshThemeBackground(GhosttyRuntime.terminalBackgroundColor(for: ConfigStore.shared.config))
+    }
+
+    func refreshThemeBackground(_ color: NSColor) {
+        layer?.backgroundColor = color.cgColor
     }
 
     /// 禁用图层隐式动画：resize 时 Metal 层立即呈现，不被动画过渡。
@@ -58,7 +72,29 @@ final class TerminalHostView: NSView {
 
     override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
+        owner?.attachIfPossible()
         owner?.syncGeometry()
+    }
+
+    // MARK: - Live resize（窗口缩放 / 分隔条拖动期间的呈现同步）
+
+    /// 窗口 live resize 期间让 Metal 呈现与 CA 事务同步提交：终端内容和周围
+    /// chrome 同帧更新，消除缩放时内容滞后一帧的"果冻"错位。
+    /// 常态保持 false——异步呈现吞吐更好，正常输出滚动不受影响。
+    override func viewWillStartLiveResize() {
+        super.viewWillStartLiveResize()
+        setSynchronousPresentation(true)
+    }
+
+    override func viewDidEndLiveResize() {
+        super.viewDidEndLiveResize()
+        setSynchronousPresentation(false)
+        owner?.syncGeometry(force: true)
+    }
+
+    /// 分隔条拖动（RatioSplitView 的 tracking loop）也复用此开关。
+    func setSynchronousPresentation(_ on: Bool) {
+        (layer as? CAMetalLayer)?.presentsWithTransaction = on
     }
 
     override func viewDidChangeBackingProperties() {
@@ -102,24 +138,29 @@ final class TerminalHostView: NSView {
     /// 3. 其余（方向键/Ctrl 组合等）：照旧转发原始事件。
     override func keyDown(with event: NSEvent) {
         guard let owner else { return }
+        // 出字修饰键翻译（Option-as-Alt / 死键 / 异国布局）：翻译后的事件喂给输入法，
+        // 并随原始事件一起带给 forwardKey 校正 consumed_mods / text。无差异时即原事件，
+        // 复用原事件对韩文等输入法的对象等价判定是必需的。
+        let translationEvent = owner.translationEvent(for: event) ?? event
         let hadMarked = hasMarkedText()
         keyDownCommittedText = []
-        _ = inputContext?.handleEvent(event)
+        _ = inputContext?.handleEvent(translationEvent)
         let committed = keyDownCommittedText ?? []
         keyDownCommittedText = nil
 
         let composing = hasMarkedText()
         owner.setPreedit(composing ? markedText.string : nil)
+        let action: ghostty_input_action_e = event.isARepeat ? GHOSTTY_ACTION_REPEAT : GHOSTTY_ACTION_PRESS
 
         if !committed.isEmpty {
             let text = committed.joined()
             if !hadMarked, !composing, text == event.characters {
-                owner.forwardKey(event, action: event.isARepeat ? GHOSTTY_ACTION_REPEAT : GHOSTTY_ACTION_PRESS)
+                owner.forwardKey(event, action: action, translationEvent: translationEvent)
             } else {
                 owner.sendTextInput(text)
             }
         } else if !composing, !hadMarked {
-            owner.forwardKey(event, action: event.isARepeat ? GHOSTTY_ACTION_REPEAT : GHOSTTY_ACTION_PRESS)
+            owner.forwardKey(event, action: action, translationEvent: translationEvent)
         }
     }
 

@@ -1,7 +1,7 @@
 import ConductorCore
 import Foundation
 
-/// 一个可一键安装的 hook「配方」（hook 市场条目）。安装即写入 Claude + Codex 的 Stop hook。
+/// 一个可一键安装的 hook「配方」（hook 市场条目）。
 struct HookRecipe: Identifiable, Sendable {
     let id: String
     let title: String
@@ -44,7 +44,7 @@ enum HookRecipes {
         HookRecipe(
             id: "log",
             title: L("完成日志"),
-            detail: L("agent 每次完成追加一行到 ~/.conductor/agent-events.log（时间 + pane）"),
+            detail: L("agent 完成时记录一条本机事件，方便之后排查节奏"),
             icon: "doc.append",
             command: gated(
                 "mkdir -p \"$HOME/.conductor\" && printf '%s stop pane=%s\\n' \"$(date '+%Y-%m-%d %H:%M:%S')\" \"$CONDUCTOR_PANE_ID\" >> \"$HOME/.conductor/agent-events.log\"",
@@ -64,8 +64,12 @@ enum HookRecipes {
         return out
     }
 
-    /// 安装一个配方到两个 agent 的 Stop hook。
+    /// 安装一个配方到两个 agent 的 hook。内置通知配方会装齐 Stop/UserPromptSubmit/SessionStart。
     static func install(_ recipe: HookRecipe) throws {
+        if recipe.id == HookInstaller.recipeID {
+            _ = try HookInstaller.installAll()
+            return
+        }
         try recipe.ensureScript?()
         for source in HookSource.allCases {
             try HookConfigDocument(source: source).addCommand(

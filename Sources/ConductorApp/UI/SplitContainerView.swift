@@ -30,7 +30,7 @@ enum SplitTreeBuilder {
 }
 
 /// NSSplitView 子类：首次按 ratio 设分隔位置；用户拖动后把新比例回报给模型。
-/// 分隔条颜色 = 画布色 → 与卡片间隙融为一体，没有硬线（卡片靠柔阴影区分）。
+/// 分隔条颜色走主题 token，尽量贴近 pane 卡片底，避免两块终端之间出现硬线。
 final class RatioSplitView: NSSplitView, NSSplitViewDelegate {
     var initialRatio: CGFloat = 0.5
     var splitID: SplitID?
@@ -38,7 +38,7 @@ final class RatioSplitView: NSSplitView, NSSplitViewDelegate {
     private var applied = false
     private var applyingInitialRatio = false
 
-    override var dividerColor: NSColor { NSColor(AppStyle.windowBackground) }
+    override var dividerColor: NSColor { AppStyle.splitDivider }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -52,26 +52,41 @@ final class RatioSplitView: NSSplitView, NSSplitViewDelegate {
 
     func restyleForCurrentTheme() {
         wantsLayer = true
-        layer?.backgroundColor = NSColor(AppStyle.windowBackground).cgColor
+        layer?.backgroundColor = .clear   // 终端画布透明：露出窗口毛玻璃；pane 卡片自带实色保可读
         needsDisplay = true
         setNeedsDisplay(bounds)
     }
 
     override func drawDivider(in rect: NSRect) {
-        NSColor(AppStyle.windowBackground).setFill()
+        AppStyle.splitDivider.setFill()
         rect.fill()
     }
 
     /// 双击分隔条 → 两侧均分（macOS 原生分屏惯例）。新比例经
     /// `splitViewDidResizeSubviews` 回报模型，照常持久化。
+    /// 单击拖动：NSSplitView 的分隔条拖动是同步 tracking loop（整个拖动都在
+    /// `super.mouseDown` 里），期间让两侧终端的 Metal 呈现与布局事务同步，
+    /// 消除拖动时内容滞后一帧的果冻感。
     override func mouseDown(with event: NSEvent) {
-        if event.clickCount == 2,
-           arrangedSubviews.count == 2,
-           isOnDivider(convert(event.locationInWindow, from: nil)) {
+        guard isOnDivider(convert(event.locationInWindow, from: nil)) else {
+            return super.mouseDown(with: event)
+        }
+        if event.clickCount == 2, arrangedSubviews.count == 2 {
             setPosition(pixelAligned(splitExtent / 2), ofDividerAt: 0)
             return
         }
+        setTerminalSynchronousPresentation(true)
         super.mouseDown(with: event)
+        setTerminalSynchronousPresentation(false)
+    }
+
+    /// 递归找出本分屏树下所有终端视图，切换其呈现同步模式。
+    private func setTerminalSynchronousPresentation(_ on: Bool) {
+        func walk(_ view: NSView) {
+            if let host = view as? TerminalHostView { host.setSynchronousPresentation(on) }
+            for sub in view.subviews { walk(sub) }
+        }
+        walk(self)
     }
 
     /// 拖动分隔条时把位置吸附到物理像素边界：小数坐标会让两侧的 Metal 终端

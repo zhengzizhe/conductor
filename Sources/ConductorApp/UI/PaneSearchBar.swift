@@ -24,8 +24,7 @@ final class PaneSearchBar: NSView, NSTextFieldDelegate {
         layer?.cornerRadius = 9
         layer?.cornerCurve = .continuous
         layer?.borderWidth = 1
-        layer?.shadowColor = NSColor.black.cgColor
-        layer?.shadowOpacity = 0.22
+        // 阴影几何静态；颜色 / 不透明度随主题，在 refreshColors() 里套用（含热切换）。
         layer?.shadowRadius = 10
         layer?.shadowOffset = CGSize(width: 0, height: -2)
 
@@ -65,15 +64,19 @@ final class PaneSearchBar: NSView, NSTextFieldDelegate {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    /// 跟当前主题取色（show 时调，主题热切换后再次打开能跟上）。
+    /// 跟当前主题取色（show 时调、PaneContainerView.restyle() 热切换时也调）。
     func refreshColors() {
+        let theme = AppStyle.theme
         layer?.backgroundColor = NSColor(AppStyle.elevated).cgColor
-        layer?.borderColor = AppStyle.theme.cardBorder.cgColor
+        layer?.borderColor = theme.cardBorder.cgColor
+        layer?.shadowColor = theme.cardShadowColor.cgColor
+        layer?.shadowOpacity = theme.cardShadowOpacity
         field.textColor = NSColor(AppStyle.textPrimary)
         countLabel.textColor = NSColor(AppStyle.textTertiary)
         for button in [prevButton, nextButton, closeButton] {
             button.contentTintColor = NSColor(AppStyle.textSecondary)
         }
+        updateCount()   // 重算计数色（命中为零时的错误红也跟随主题 token）
     }
 
     private func configure(_ button: NSButton, symbol: String, help: String, action: @escaping () -> Void) {
@@ -152,7 +155,7 @@ final class PaneSearchBar: NSView, NSTextFieldDelegate {
             countLabel.stringValue = "\(total)"
         }
         countLabel.textColor = total == 0
-            ? NSColor(red: 0.92, green: 0.34, blue: 0.34, alpha: 0.9)
+            ? NSColor(AppStyle.errorRed).withAlphaComponent(0.9)
             : NSColor(AppStyle.textTertiary)
     }
 

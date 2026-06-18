@@ -16,9 +16,7 @@ struct SessionHoverPreviewPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            Divider().overlay(AppStyle.separator)
             transcriptBody
-            Divider().overlay(AppStyle.separator)
             footer
         }
         .frame(width: panelWidth, height: panelHeight)

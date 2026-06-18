@@ -23,6 +23,22 @@ struct SidebarView: View {
     @State private var hoverTask: Task<Void, Never>?
     /// 一次性引导：用户首次触发悬停预览后永久隐藏提示。
     @AppStorage("sidebar.sessionHoverHintSeen") private var hoverHintSeen = false
+    /// AI 会话开关：开了在每个工作区下方内嵌它自己的最近会话，关了只看工作区。
+    @AppStorage("sidebar.showSessions") private var showSessions = true
+    /// 按工作区收起的会话列表（逗号分隔的 workspace id，持久化）。
+    @AppStorage("sidebar.collapsedSessionLists") private var collapsedSessionListsRaw = ""
+    /// 「展开显示」临时放开条数限制的工作区（会话内联展开，不持久化）。
+    @State private var inlineExpandedSessionLists: Set<String> = []
+
+    private var collapsedSessionLists: Set<String> {
+        Set(collapsedSessionListsRaw.split(separator: ",").map(String.init))
+    }
+
+    private func toggleSessionListCollapsed(_ id: WorkspaceID) {
+        var set = collapsedSessionLists
+        if set.contains(id.value) { set.remove(id.value) } else { set.insert(id.value) }
+        collapsedSessionListsRaw = set.sorted().joined(separator: ",")
+    }
     /// Finder 文件夹正悬在侧栏上方（释放即新建工作区）→ 整栏亮接收态。
     @State private var folderDropTargeted = false
     /// 文件夹树状态（展开集合 + 懒加载缓存），与侧栏同生命周期。
@@ -51,12 +67,6 @@ struct SidebarView: View {
                     } else {
                         workspaceList
                     }
-
-                    if !isCollapsed {
-                        sessionsSection
-                            .padding(.horizontal, 10)
-                            .padding(.top, 14)
-                    }
                 }
                 .scrollIndicators(.never)   // `.hidden` 在系统“始终显示滚动条”下仍会画 legacy 滚动条
                 // 「定位当前目录」：等展开后的行上树再滚（Lazy 容器需要一拍布局）
@@ -72,7 +82,8 @@ struct SidebarView: View {
             Spacer(minLength: 0)
         }
         .frame(maxHeight: .infinity)
-        .background(AppStyle.sidebarBackground)
+        // 侧栏与底部状态栏共用根背景；和内容区之间不再额外画分割线。
+        .background(.clear)
         // 从 Finder 拖文件夹进来 → 新建工作区（同路径已存在则直接切过去）
         .dropDestination(for: URL.self) { urls, _ in
             handleFolderDrop(urls)
@@ -99,7 +110,7 @@ struct SidebarView: View {
     }
 
     private var workspaceList: some View {
-        VStack(alignment: isCollapsed ? .center : .leading, spacing: 3) {
+        VStack(alignment: isCollapsed ? .center : .leading, spacing: 5) {
             let workspaces = coordinator.visibleWorkspaces
             ForEach(Array(workspaces.enumerated()), id: \.element.id) { index, ws in
                 let selected = ws.id == coordinator.store.activeWorkspace
@@ -109,6 +120,14 @@ struct SidebarView: View {
                     paneTitles: coordinator.paneTitles,
                     paneCwds: coordinator.paneCwds
                 )
+                let sessionRecords: [AgentSessionRecord] = (!isCollapsed && showSessions)
+                    ? ownedSessions(
+                        for: ws,
+                        fetch: inlineExpandedSessionLists.contains(ws.id.value) ? 31 : 6)
+                    : []
+                let sessionsCollapsed: Bool? = sessionRecords.isEmpty
+                    ? nil
+                    : collapsedSessionLists.contains(ws.id.value)
                 let row = WorkspaceRow(
                     name: ws.name,
                     summary: summary,
@@ -117,18 +136,37 @@ struct SidebarView: View {
                     unseenDoneCount: coordinator.workspaceUnseenDoneCount(ws),
                     isEditing: editingWorkspace == ws.id,
                     isCollapsed: isCollapsed,
+                    sessionsCollapsed: sessionsCollapsed,
                     draft: $draftName,
                     focused: $renameFocused,
                     onSelect: { if editingWorkspace == nil { coordinator.selectWorkspace(ws.id) } },
-                    onCommit: { commitRename() }
+                    onCommit: { commitRename() },
+                    onToggleSessions: {
+                        withAnimation(Motion.panel) { toggleSessionListCollapsed(ws.id) }
+                    }
                 )
                 .contextMenu {
+                    ForEach(coordinator.launchableAgents) { agent in
+                        Button {
+                            coordinator.launchAIAgentSession(agent, workspaceID: ws.id, cwd: ws.path)
+                        } label: {
+                            Label(
+                                AIAgentMenuPresentation.sessionTitle(for: agent),
+                                systemImage: AIAgentMenuPresentation.menuSystemImage(for: agent))
+                        }
+                    }
+                    if !coordinator.launchableAgents.isEmpty {
+                        Divider()
+                    }
                     Button { beginRename(ws) } label: { Label(L("重命名"), systemImage: "pencil") }
                     Button { coordinator.revealInFinder(ws.path) } label: {
                         Label(L("在 Finder 中显示"), systemImage: "folder")
                     }
                     Button { coordinator.copyToClipboard(ws.path) } label: {
                         Label(L("复制路径"), systemImage: "doc.on.doc")
+                    }
+                    Button { reauthorizeWorkspace(ws) } label: {
+                        Label(L("重新授权目录"), systemImage: "lock.open")
                     }
                     Divider()
                     Button(role: .destructive) { confirmRemoveWorkspace(ws) } label: {
@@ -149,10 +187,18 @@ struct SidebarView: View {
                 } else {
                     row
                 }
+
+                // 会话列表在卡片外面、紧贴下方（折叠箭头在工作区行里）
+                if sessionsCollapsed == false {
+                    workspaceSessionList(for: ws, records: sessionRecords, selected: selected)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
             }
         }
         .padding(.horizontal, isCollapsed ? 8 : 10)
         .padding(.top, 2)
+        .animation(Motion.panel, value: collapsedSessionListsRaw)
+        .animation(Motion.panel, value: showSessions)
     }
 
     /// 悬停预览绑定：popover 是独立 NSWindow，能浮在终端区的 Metal 视图之上
@@ -206,17 +252,17 @@ struct SidebarView: View {
                 if !isCollapsed {
                     Text("Conductor")
                         .font(.system(size: 16, weight: .bold))
+                        .tracking(0.2)
                         .foregroundStyle(AppStyle.textPrimary)
                     Spacer()
                 }
-                Button(action: coordinator.toggleSidebar) {
-                    Image(systemName: isCollapsed ? "sidebar.right" : "sidebar.left")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(AppStyle.textSecondary)
-                }
-                .buttonStyle(IconButtonStyle(size: 28))
-                .help(isCollapsed ? L("展开侧边栏") : L("收起侧边栏"))
-                .accessibilityLabel(isCollapsed ? L("展开侧边栏") : L("收起侧边栏"))
+                IconOnlyButton(
+                    systemName: isCollapsed ? "sidebar.right" : "sidebar.left",
+                    help: isCollapsed ? L("展开侧边栏") : L("收起侧边栏"),
+                    size: 28,
+                    symbolSize: 13) {
+                        coordinator.toggleSidebar()
+                    }
             }
             .frame(maxWidth: .infinity, alignment: isCollapsed ? .center : .leading)
             .padding(.horizontal, isCollapsed ? 0 : 16)
@@ -225,47 +271,52 @@ struct SidebarView: View {
 
             // 工作区分区头
             if isCollapsed {
-                Button {
+                IconOnlyButton(
+                    systemName: "bubble.left.and.text.bubble.right",
+                    help: L("Agent 会话"),
+                    size: 30,
+                    symbolSize: 12) {
                     let path = coordinator.store.workspaces
                         .first(where: { $0.id == coordinator.store.activeWorkspace })?.path
                     coordinator.openSessionManager(scopePath: path)
-                } label: {
-                    Image(systemName: "bubble.left.and.text.bubble.right")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(AppStyle.textSecondary)
                 }
-                .buttonStyle(IconButtonStyle(size: 30))
-                .help(L("Agent 会话"))
-                .accessibilityLabel(L("Agent 会话"))
-                Button(action: addWorkspace) {
-                    Image(systemName: "plus").font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(AppStyle.textSecondary)
-                }
-                .buttonStyle(IconButtonStyle(size: 30))
-                .help(L("新增工作区"))
-                .accessibilityLabel(L("新增工作区"))
+                IconOnlyButton(
+                    systemName: "plus",
+                    help: L("新增工作区"),
+                    size: 30,
+                    symbolSize: 12,
+                    action: addWorkspace)
                 .padding(.bottom, 6)
             } else {
                 HStack(spacing: 8) {
                     listModeSwitcher
                     Spacer(minLength: 4)
                     if listMode == .workspaces {
-                        Button(action: addWorkspace) {
-                            Image(systemName: "plus").font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(AppStyle.textSecondary)
+                        IconOnlyButton(
+                            systemName: showSessions
+                                ? "bubble.left.and.text.bubble.right.fill"
+                                : "bubble.left.and.text.bubble.right",
+                            help: showSessions ? L("隐藏 AI 会话") : L("显示 AI 会话"),
+                            size: 24,
+                            symbolSize: 11,
+                            tint: showSessions ? AppStyle.accent : AppStyle.textSecondary) {
+                            withAnimation(Motion.panel) { showSessions.toggle() }
                         }
-                        .buttonStyle(IconButtonStyle(size: 24))
-                        .help(L("新增工作区"))
-                        .accessibilityLabel(L("新增工作区"))
+                        .transition(.scale.combined(with: .opacity))
+                        IconOnlyButton(
+                            systemName: "plus",
+                            help: L("新增工作区"),
+                            size: 24,
+                            symbolSize: 12,
+                            action: addWorkspace)
                         .transition(.scale.combined(with: .opacity))
                     } else {
-                        Button(action: locateActiveDirectory) {
-                            Image(systemName: "scope").font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(AppStyle.textSecondary)
-                        }
-                        .buttonStyle(IconButtonStyle(size: 24))
-                        .help(L("在树中定位当前终端目录"))
-                        .accessibilityLabel(L("在树中定位当前终端目录"))
+                        IconOnlyButton(
+                            systemName: "scope",
+                            help: L("在树中定位当前终端目录"),
+                            size: 24,
+                            symbolSize: 12,
+                            action: locateActiveDirectory)
                         .transition(.scale.combined(with: .opacity))
                     }
                 }
@@ -285,7 +336,7 @@ struct SidebarView: View {
         }
         .padding(3)
         .background(
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
+            RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                 .fill(AppStyle.activeFill.opacity(0.7))
         )
         // 模式也可能被外部切换（命令面板跳工作区、通知跳进文件夹上下文），同样要有滑动
@@ -311,17 +362,17 @@ struct SidebarView: View {
             .frame(height: 21)
             .background {
                 if selected {
-                    RoundedRectangle(cornerRadius: 6.5, style: .continuous)
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .fill(AppStyle.elevated)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 6.5, style: .continuous)
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
                                 .strokeBorder(AppStyle.textPrimary.opacity(0.08), lineWidth: 1)
                         )
-                        .shadow(color: .black.opacity(0.28), radius: 2.5, y: 1)
+                        .shadow(color: Color(nsColor: AppStyle.theme.cardShadowColor).opacity(0.28), radius: 2.5, y: 1)
                         .matchedGeometryEffect(id: "modeTabSelection", in: modeTabNamespace)
                 }
             }
-            .contentShape(RoundedRectangle(cornerRadius: 6.5, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? [.isSelected] : [])
@@ -340,79 +391,121 @@ struct SidebarView: View {
         renameFocused = false
     }
 
-    private var sessionsSection: some View {
-        let workspacePath = coordinator.store.workspaces
-            .first(where: { $0.id == coordinator.store.activeWorkspace })?.path ?? ""
-        let sessions = sessionStore.recordsForWorkspace(workspacePath, limit: 500)
+    private func reauthorizeWorkspace(_ ws: Workspace) {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = URL(fileURLWithPath: ws.path)
+        panel.prompt = L("重新授权")
+        panel.message = L("选择「%@」目录以保存长期访问权限。", ws.name)
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let selected = url.standardizedFileURL
+        let current = URL(fileURLWithPath: ws.path).standardizedFileURL
+        guard selected.path == current.path else {
+            ToastHUD.shared.show(
+                L("请选择同一个工作区目录"),
+                icon: "exclamationmark.triangle.fill",
+                over: coordinator.window)
+            return
+        }
+        guard let bookmarkData = SecurityScopedBookmarks.bookmarkData(for: selected) else {
+            ToastHUD.shared.show(
+                L("无法保存目录授权"),
+                icon: "exclamationmark.triangle.fill",
+                over: coordinator.window)
+            return
+        }
+        coordinator.addWorkspace(path: selected.path, bookmarkData: bookmarkData)
+        ToastHUD.shared.show(
+            L("已保存目录授权"),
+            icon: "lock.open.fill",
+            over: coordinator.window)
+    }
 
-        return VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(L("会话"))
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(AppStyle.textTertiary)
-                    .textCase(.uppercase)
-                    .tracking(0.5)
-                Spacer()
-                Button(L("全部")) {
-                    coordinator.openSessionManager(scopePath: workspacePath.isEmpty ? nil : workspacePath)
+    /// 会话归属去重：cwd 同时落在父子两个工作区路径下时，只归路径最深的那个，
+    /// 否则同一条会话会在 `~` 和 `~/xxx` 下各出现一次（悬停预览也会弹两个）。
+    private func ownedSessions(for ws: Workspace, fetch: Int) -> [AgentSessionRecord] {
+        let paths = coordinator.visibleWorkspaces.map {
+            $0.path.hasSuffix("/") ? String($0.path.dropLast()) : $0.path
+        }
+        let own = ws.path.hasSuffix("/") ? String(ws.path.dropLast()) : ws.path
+        return sessionStore.recordsForWorkspace(ws.path, limit: 50).filter { record in
+            guard let cwd = record.cwd else { return false }
+            let owner = paths
+                .filter { cwd == $0 || cwd.hasPrefix($0 + "/") }
+                .max { $0.count < $1.count }
+            return owner == own
+        }
+        .prefix(fetch).map { $0 }
+    }
+
+    /// 工作区卡片下方的会话列表（参考样式：标题 + 右侧相对时间，底部「展开显示」）。
+    @ViewBuilder
+    private func workspaceSessionList(
+        for ws: Workspace, records: [AgentSessionRecord], selected: Bool
+    ) -> some View {
+        let expanded = inlineExpandedSessionLists.contains(ws.id.value)
+        let displayLimit = expanded ? 30 : 5
+        VStack(alignment: .leading, spacing: 1) {
+            if selected, !hoverHintSeen {
+                HStack(spacing: 5) {
+                    Image(systemName: "cursorarrow.rays")
+                        .font(.system(size: 10, weight: .medium))
+                    Text(L("鼠标悬停可预览对话"))
+                        .font(.system(size: 10.5))
                 }
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(AppStyle.textSecondary)
-                .buttonStyle(.plain)
+                .foregroundStyle(AppStyle.textTertiary)
+                .padding(.leading, 9)
+                .padding(.bottom, 2)
+                .transition(.opacity)
             }
-            .padding(.leading, 4)
-
-            if sessionStore.isLoading, sessions.isEmpty {
-                HStack(spacing: 6) {
-                    ProgressView().controlSize(.small).scaleEffect(0.65)
-                    Text(L("扫描中…"))
-                        .font(.system(size: 11))
-                        .foregroundStyle(AppStyle.textTertiary)
-                }
-                .padding(.leading, 4)
-            } else if sessions.isEmpty {
-                Text(L("暂无 Agent 会话"))
-                    .font(.system(size: 11))
-                    .foregroundStyle(AppStyle.textTertiary)
-                    .padding(.leading, 4)
-            } else {
-                if !hoverHintSeen {
-                    HStack(spacing: 5) {
-                        Image(systemName: "cursorarrow.rays")
-                            .font(.system(size: 10, weight: .medium))
-                        Text(L("鼠标悬停可预览对话"))
-                            .font(.system(size: 10.5))
+            ForEach(records.prefix(displayLimit)) { record in
+                SidebarSessionRow(
+                    record: record,
+                    coordinator: coordinator,
+                    onResume: { coordinator.resumeSession(record, inPane: nil) },
+                    onHover: { handleSessionHover(record, inside: $0) }
+                )
+                .popover(isPresented: hoverPreviewBinding(for: record), arrowEdge: .trailing) {
+                    SessionHoverPreviewPanel(record: record) {
+                        coordinator.resumeSession(record, inPane: nil)
+                        hoverRecord = nil
                     }
-                    .foregroundStyle(AppStyle.textTertiary)
-                    .padding(.leading, 4)
-                    .padding(.bottom, 2)
-                    .transition(.opacity)
-                }
-                LazyVStack(alignment: .leading, spacing: 2) {
-                    ForEach(sessions) { record in
-                        SidebarSessionRow(
-                            record: record,
-                            onResume: { coordinator.resumeSession(record, inPane: nil) },
-                            onHover: { handleSessionHover(record, inside: $0) }
-                        )
-                        .popover(isPresented: hoverPreviewBinding(for: record), arrowEdge: .trailing) {
-                            SessionHoverPreviewPanel(record: record) {
-                                coordinator.resumeSession(record, inPane: nil)
-                                hoverRecord = nil
-                            }
-                            .onHover { pinned in
-                                hoverPanelPinned = pinned
-                                if pinned {
-                                    hoverTask?.cancel()
-                                } else {
-                                    scheduleClearHover(after: 0.15)
-                                }
-                            }
+                    .onHover { pinned in
+                        hoverPanelPinned = pinned
+                        if pinned {
+                            hoverTask?.cancel()
+                        } else {
+                            scheduleClearHover(after: 0.15)
                         }
                     }
                 }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+            if records.count > displayLimit || expanded {
+                Button {
+                    withAnimation(Motion.panel) {
+                        if expanded {
+                            inlineExpandedSessionLists.remove(ws.id.value)
+                        } else {
+                            inlineExpandedSessionLists.insert(ws.id.value)
+                        }
+                    }
+                } label: {
+                    Text(expanded ? L("收起显示") : L("展开显示"))
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundStyle(AppStyle.textTertiary)
+                        .padding(.horizontal, 9)
+                        .frame(height: 22)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
         }
+        .padding(.leading, 16)
+        .padding(.bottom, 4)
+        .animation(Motion.panel, value: expanded)
     }
 
     /// 删除工作区是不可撤销的破坏性操作（会关掉其中所有终端），先确认再动手。
@@ -458,9 +551,14 @@ struct SidebarView: View {
         var lastExisting: Workspace?
         for dir in dirs {
             if let existing = coordinator.visibleWorkspaces.first(where: { $0.path == dir.path }) {
+                coordinator.addWorkspace(
+                    path: dir.path,
+                    bookmarkData: SecurityScopedBookmarks.bookmarkData(for: dir))
                 lastExisting = existing
             } else {
-                coordinator.addWorkspace(path: dir.path)
+                coordinator.addWorkspace(
+                    path: dir.path,
+                    bookmarkData: SecurityScopedBookmarks.bookmarkData(for: dir))
                 created += 1
                 lastCreated = dir
             }
@@ -488,13 +586,16 @@ struct SidebarView: View {
         panel.allowsMultipleSelection = false
         panel.prompt = L("选为工作区")
         if panel.runModal() == .OK, let url = panel.url {
-            coordinator.addWorkspace(path: url.path)
+            coordinator.addWorkspace(
+                path: url.path,
+                bookmarkData: SecurityScopedBookmarks.bookmarkData(for: url))
         }
     }
 }
 
 private struct SidebarSessionRow: View {
     let record: AgentSessionRecord
+    let coordinator: AppCoordinator
     let onResume: () -> Void
     let onHover: (Bool) -> Void
     @State private var hovering = false
@@ -503,30 +604,81 @@ private struct SidebarSessionRow: View {
 
     var body: some View {
         Button(action: onResume) {
-            HStack(spacing: 8) {
+            // 单行：logo + 标题（左）/ 相对时间（右），细节悬停预览里都有。
+            HStack(spacing: 7) {
                 sessionLogo
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(record.title)
-                        .font(.system(size: 11.5, weight: .medium))
-                        .foregroundStyle(hovering ? AppStyle.textPrimary : AppStyle.textSecondary)
-                        .lineLimit(1)
-                    Text("\(record.agent.capitalized) · \(record.shortID)")
-                        .font(.system(size: 10))
-                        .foregroundStyle(AppStyle.textTertiary)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 0)
+                Text(record.title)
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(hovering ? AppStyle.textPrimary : AppStyle.textSecondary)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                Text(Self.compactAge(record.modifiedAt))
+                    .font(.system(size: 10))
+                    .foregroundStyle(AppStyle.textTertiary)
+                    .lineLimit(1)
+                    .layoutPriority(1)
             }
             .padding(.horizontal, 9)
-            .padding(.vertical, 6)
+            .padding(.vertical, 5.5)
             .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                     .fill(hovering ? AppStyle.hoverFill : Color.clear))
         }
         .buttonStyle(.plain)
         .onHover { inside in
             hovering = inside
             onHover(inside)
+        }
+        // 右键菜单：与「管理会话」面板同一套动作（侧栏行此前只能点击续聊）。
+        .contextMenu {
+            Button { coordinator.resumeSession(record, inPane: nil) } label: {
+                Label(L("新标签续聊"), systemImage: "plus.bubble")
+            }
+            Button { coordinator.resumeSession(record, inPane: coordinator.sessionTargetPane) } label: {
+                Label(L("当前面板续聊"), systemImage: "bubble.left.and.text.bubble.right")
+            }
+            .disabled(coordinator.sessionTargetPane == nil)
+            Divider()
+            Button { coordinator.copyToClipboard(record.sessionID) } label: {
+                Label(L("复制会话 ID"), systemImage: "number")
+            }
+            if let cmd = record.resumeCommand {
+                Button { coordinator.copyToClipboard(cmd) } label: {
+                    Label(L("复制续聊命令"), systemImage: "terminal")
+                }
+            }
+            Button { coordinator.openSessionManager(scopePath: record.cwd) } label: {
+                Label(L("管理全部会话…"), systemImage: "list.bullet.rectangle")
+            }
+            Divider()
+            Button(role: .destructive) { confirmDelete() } label: {
+                Label(L("删除会话…"), systemImage: "trash")
+            }
+        }
+    }
+
+    /// 删除确认（与管理面板同款）。
+    private func confirmDelete() {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = L("删除会话「%@」？", String(record.title.prefix(40)))
+        alert.informativeText = L("会删除这条本机会话记录，无法撤销。")
+        alert.addButton(withTitle: L("删除"))
+        alert.addButton(withTitle: L("取消"))
+        alert.buttons.first?.hasDestructiveAction = true
+        if alert.runModal() == .alertFirstButtonReturn {
+            SessionManagerStore.shared.delete(record)
+        }
+    }
+
+    /// 紧凑相对时间：刚刚 / N 分钟 / N 小时 / N 天。
+    private static func compactAge(_ date: Date) -> String {
+        let seconds = max(0, -date.timeIntervalSinceNow)
+        switch seconds {
+        case ..<60: return L("刚刚")
+        case ..<3600: return L("%ld 分钟", Int(seconds / 60))
+        case ..<86400: return L("%ld 小时", Int(seconds / 3600))
+        default: return L("%ld 天", Int(seconds / 86400))
         }
     }
 
@@ -554,69 +706,22 @@ private struct WorkspaceRow: View {
     let unseenDoneCount: Int
     let isEditing: Bool
     let isCollapsed: Bool
+    /// 名字旁的会话折叠箭头（nil = 这个工作区没有可显示的会话，不画箭头）。
+    let sessionsCollapsed: Bool?
     @Binding var draft: String
     var focused: FocusState<Bool>.Binding
     let onSelect: () -> Void
     let onCommit: () -> Void
+    let onToggleSessions: () -> Void
     @State private var hovering = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: isCollapsed ? 0 : 8) {
-            workspaceGlyph
-                .padding(.top, isCollapsed ? 0 : 2)
-            if !isCollapsed {
-                VStack(alignment: .leading, spacing: 5) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        if isEditing {
-                            TextField("", text: $draft)
-                                .textFieldStyle(.plain)
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(AppStyle.textPrimary)
-                                .focused(focused)
-                                .onSubmit { onCommit() }
-                        } else {
-                            Text(name)
-                                .font(.system(size: 13, weight: selected ? .semibold : .regular))
-                                .foregroundStyle(selected ? AppStyle.textPrimary : AppStyle.textSecondary)
-                                .lineLimit(1)
-                        }
-                        if isThinking {
-                            ThinkingIndicator(size: 8)
-                                .transition(.scale.combined(with: .opacity))
-                        }
-                        if unseenDoneCount > 0 {
-                            unseenDoneBadge
-                                .transition(.scale.combined(with: .opacity))
-                        }
-                        Spacer(minLength: 0)
-                        metricsBadge
-                    }
-
-                    Text(summary.pathText)
-                        .font(.system(size: 11, weight: .regular))
-                        .foregroundStyle(AppStyle.textTertiary)
-                        .lineLimit(1)
-
-                    if let activeDetail = summary.activeDetailText {
-                        HStack(spacing: 5) {
-                            Image(systemName: "terminal")
-                                .font(.system(size: 10, weight: .semibold))
-                            Text(activeDetail)
-                                .font(.system(size: 11, weight: .medium))
-                                .lineLimit(1)
-                        }
-                        .foregroundStyle(AppStyle.accent)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                    }
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: isCollapsed ? .center : .leading)
-        .padding(.horizontal, isCollapsed ? 0 : 9)
-        .padding(.vertical, isCollapsed ? 7 : 7)
+        mainRow
+        .padding(.horizontal, isCollapsed ? 0 : 7)
+        .padding(.vertical, 7)
         .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(selected ? AppStyle.activeFill : (hovering ? AppStyle.hoverFill : Color.clear))
+            RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                .fill(selected ? AppStyle.accent.opacity(0.12) : (hovering ? AppStyle.hoverFill : Color.clear))
         )
         .contentShape(Rectangle())
         .animation(Motion.hover, value: hovering)
@@ -630,6 +735,82 @@ private struct WorkspaceRow: View {
             : summary.tooltipText)
         .accessibilityLabel("\(name), \(summary.pathText), \(summary.metricsText)")
         .animation(.easeOut(duration: 0.2), value: unseenDoneCount > 0)
+    }
+
+    private var mainRow: some View {
+        HStack(alignment: .top, spacing: isCollapsed ? 0 : 7) {
+            workspaceGlyph
+                .padding(.top, isCollapsed ? 0 : 2)
+            if !isCollapsed {
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(alignment: .firstTextBaseline, spacing: 5) {
+                        if isEditing {
+                            TextField("", text: $draft)
+                                .textFieldStyle(.plain)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(AppStyle.textPrimary)
+                                .focused(focused)
+                                .onSubmit { onCommit() }
+                                .layoutPriority(3)
+                        } else {
+                            Text(name)
+                                .font(.system(size: 13, weight: selected ? .semibold : .regular))
+                                .foregroundStyle(selected ? AppStyle.textPrimary : AppStyle.textSecondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.72)
+                                .allowsTightening(true)
+                                .truncationMode(.middle)   // 目录名头尾都可能是区分信息，砍中间
+                                .layoutPriority(8)         // 窄侧栏里名字必须优先于状态徽标
+                        }
+                        if !isEditing, let collapsed = sessionsCollapsed {
+                            Button(action: onToggleSessions) {
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 8, weight: .bold))
+                                    .foregroundStyle(AppStyle.textTertiary)
+                                    .rotationEffect(.degrees(collapsed ? -90 : 0))
+                                    .frame(width: 15, height: 15)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .help(collapsed ? L("展开会话") : L("收起会话"))
+                        }
+                        if isThinking {
+                            ThinkingIndicator(size: 8)
+                                .transition(.scale.combined(with: .opacity))
+                        }
+                        if unseenDoneCount > 0 {
+                            unseenDoneBadge
+                                .transition(.scale.combined(with: .opacity))
+                        }
+                    }
+
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(summary.pathText)
+                            .font(.system(size: 11, weight: .regular))
+                            .foregroundStyle(AppStyle.textTertiary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .layoutPriority(1)
+                        Spacer(minLength: 4)
+                        metricsBadge
+                    }
+
+                    if let activeDetail = summary.activeDetailText {
+                        HStack(spacing: 5) {
+                            Image(systemName: "terminal")
+                                .font(.system(size: 10, weight: .semibold))
+                            Text(activeDetail)
+                                .font(.system(size: 11, weight: .medium))
+                                .lineLimit(1)
+                        }
+                        .foregroundStyle(AppStyle.accent)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: isCollapsed ? .center : .leading)
     }
 
     /// 「完成未读」绿点：>1 时带数字。
@@ -650,9 +831,9 @@ private struct WorkspaceRow: View {
 
     private var workspaceGlyph: some View {
         ZStack(alignment: .topTrailing) {
-            Image(systemName: "folder")
+            Image(systemName: selected ? "folder.fill" : "folder")
                 .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(selected ? AppStyle.textPrimary : AppStyle.textSecondary)
+                .foregroundStyle(selected ? AppStyle.accent : AppStyle.textSecondary)
                 .frame(width: isCollapsed ? 22 : 18, height: 20)
             // 收起态没有名字行，思考动效挂在图标右下角（右上角留给 pane 数角标）
             if isCollapsed, isThinking {
@@ -683,14 +864,27 @@ private struct WorkspaceRow: View {
         .frame(width: isCollapsed ? 22 : 18, height: 20)
     }
 
+    /// 紧凑指标徽标：图标 + 数字（完整文字在行的悬浮提示里），把横向空间尽量让给名字。
     private var metricsBadge: some View {
-        Text(summary.metricsText)
-            .font(.system(size: 10, weight: .semibold))
-            .foregroundStyle(selected ? AppStyle.textSecondary : AppStyle.textTertiary)
-            .lineLimit(1)
-            .fixedSize(horizontal: true, vertical: false)
-            .padding(.horizontal, 7)
-            .frame(height: 18)
-            .background(Capsule().fill(selected ? AppStyle.hoverFill : AppStyle.activeFill))
+        HStack(spacing: 6) {
+            metricsItem(icon: "rectangle.stack", count: summary.tabCount)
+            metricsItem(icon: "square.split.2x1", count: summary.paneCount)
+        }
+        .foregroundStyle(selected ? AppStyle.textSecondary : AppStyle.textTertiary)
+        .fixedSize(horizontal: true, vertical: false)
+        .padding(.horizontal, 7)
+        .frame(height: 18)
+        .background(Capsule().fill(selected ? AppStyle.hoverFill : AppStyle.activeFill))
+        .help(summary.metricsText)
+    }
+
+    private func metricsItem(icon: String, count: Int) -> some View {
+        HStack(spacing: 2.5) {
+            Image(systemName: icon)
+                .font(.system(size: 8.5, weight: .semibold))
+            Text("\(count)")
+                .font(.system(size: 10, weight: .semibold))
+                .monospacedDigit()
+        }
     }
 }

@@ -5,6 +5,7 @@ enum SettingsSectionID: String, CaseIterable, Identifiable {
     case terminal
     case ghostty
     case behavior
+    case companion
     case keybindings
 
     static let `default`: SettingsSectionID = .appearance
@@ -17,16 +18,18 @@ enum SettingsSectionID: String, CaseIterable, Identifiable {
         case .terminal: L("终端")
         case .ghostty: L("高级")
         case .behavior: L("行为")
+        case .companion: L("伙伴")
         case .keybindings: L("快捷键")
         }
     }
 
     var subtitle: String {
         switch self {
-        case .appearance: L("主题、字体、配色")
+        case .appearance: L("主题、语言、配色")
         case .terminal: L("Shell 与会话")
         case .ghostty: L("底层终端选项")
         case .behavior: L("工作区默认行为")
+        case .companion: L("桌面通知宠物")
         case .keybindings: L("应用命令")
         }
     }
@@ -37,6 +40,7 @@ enum SettingsSectionID: String, CaseIterable, Identifiable {
         case .terminal: "terminal"
         case .ghostty: "slider.horizontal.3"
         case .behavior: "arrow.triangle.2.circlepath"
+        case .companion: "pawprint.fill"
         case .keybindings: "keyboard"
         }
     }

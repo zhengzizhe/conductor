@@ -1,3 +1,4 @@
+import ConductorCore
 import Foundation
 
 /// 一条来自 CLI hook 的事件。`type`：
@@ -6,6 +7,11 @@ import Foundation
 struct HookEvent {
     let paneID: String?
     let type: String?
+    let agent: String?
+    let sessionID: String?
+    let cwd: String?
+    let transcriptPath: String?
+    let lifecycle: AgentSessionLifecycle?
     let title: String
     let message: String
 }
@@ -54,8 +60,50 @@ final class HooksInbox {
             let title = (obj["title"] as? String)?.isEmpty == false
                 ? (obj["title"] as! String) : L("AI 已完成")
             let message = (obj["message"] as? String) ?? ""
+            let agent = Self.nonEmpty(obj["agent"] as? String)
+            let sessionID = Self.nonEmpty((obj["sessionId"] as? String)
+                                          ?? (obj["sessionID"] as? String)
+                                          ?? (obj["session_id"] as? String))
+            let cwd = Self.nonEmpty((obj["cwd"] as? String)
+                                    ?? (obj["workingDirectory"] as? String)
+                                    ?? (obj["working_directory"] as? String))
+            let transcriptPath = Self.nonEmpty((obj["transcriptPath"] as? String)
+                                               ?? (obj["transcript_path"] as? String))
+            let lifecycle = Self.lifecycle(
+                (obj["lifecycle"] as? String) ?? (obj["state"] as? String),
+                eventType: obj["type"] as? String)
             onEvent?(HookEvent(
-                paneID: pane, type: obj["type"] as? String, title: title, message: message))
+                paneID: pane,
+                type: obj["type"] as? String,
+                agent: agent,
+                sessionID: sessionID,
+                cwd: cwd,
+                transcriptPath: transcriptPath,
+                lifecycle: lifecycle,
+                title: title,
+                message: message))
+        }
+    }
+
+    private static func nonEmpty(_ raw: String?) -> String? {
+        let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed?.isEmpty == false ? trimmed : nil
+    }
+
+    private static func lifecycle(_ raw: String?, eventType: String?) -> AgentSessionLifecycle? {
+        if let raw {
+            switch raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            case "running", "busy", "thinking": return .running
+            case "idle", "done", "stopped": return .idle
+            case "needsinput", "needs_input", "waiting", "waitingforinput": return .needsInput
+            case "unknown": return .unknown
+            default: break
+            }
+        }
+        switch eventType {
+        case "busy", "sessionStart": return .running
+        case "done": return .idle
+        default: return nil
         }
     }
 }

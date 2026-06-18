@@ -26,9 +26,6 @@ struct QueuePanelView: View {
                     .foregroundStyle(AppStyle.textPrimary)
                     .lineLimit(1)
                 Spacer()
-                Text(L("Esc 关闭"))
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(AppStyle.textTertiary)
             }
             .padding(.horizontal, 16)
             .padding(.top, 14)
@@ -47,37 +44,38 @@ struct QueuePanelView: View {
                         .fill(AppStyle.activeFill))
                 .padding(.horizontal, 16)
 
-            Text(L("回车加入队列；当前任务完成（Stop）后自动逐条发出"))
+            Text(L("当前任务完成后自动发送下一条"))
                 .font(.system(size: 10))
                 .foregroundStyle(AppStyle.textTertiary)
                 .padding(.horizontal, 18)
                 .padding(.top, 6)
                 .padding(.bottom, 8)
 
-            Rectangle().fill(AppStyle.separator).frame(height: 1)
-            ScrollView {
-                VStack(spacing: 3) {
-                    if queue.isEmpty {
-                        Text(L("队列为空。先排几条，让 Agent 一条接一条干。"))
-                            .font(.system(size: 11))
-                            .foregroundStyle(AppStyle.textTertiary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.top, 56)
-                    } else {
-                        ForEach(Array(queue.enumerated()), id: \.offset) { index, item in
-                            QueueRow(index: index, text: item) {
-                                coordinator.removeQueuedPrompt(at: index, for: pane)
+            ToolSoftGroup {
+                ScrollView {
+                    VStack(spacing: 3) {
+                        if queue.isEmpty {
+                            ToolEmptyState(
+                                icon: "tray",
+                                title: L("队列为空"),
+                                detail: L("先排几条，让 Agent 一条接一条干。"),
+                                compact: true)
+                                .padding(.top, 20)
+                        } else {
+                            ForEach(Array(queue.enumerated()), id: \.offset) { index, item in
+                                QueueRow(index: index, text: item) {
+                                    coordinator.removeQueuedPrompt(at: index, for: pane)
+                                }
                             }
                         }
                     }
+                    .padding(.vertical, 2)
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
+                .scrollIndicators(.never)
+                .frame(height: 176)
             }
-            .scrollIndicators(.never)
-            .frame(height: 176)
+            .padding(.horizontal, 16)
 
-            Rectangle().fill(AppStyle.separator).frame(height: 1)
             HStack {
                 Text(L("%ld 条排队中", queue.count))
                     .font(.system(size: 10.5))
@@ -85,31 +83,29 @@ struct QueuePanelView: View {
                     .foregroundStyle(AppStyle.textTertiary)
                 Spacer()
                 if !queue.isEmpty {
-                    Button(L("清空")) { coordinator.clearQueue(for: pane) }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(AppStyle.textTertiary)
-                    Button {
-                        coordinator.sendNextQueuedNow(for: pane)
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "paperplane.fill")
-                                .font(.system(size: 9, weight: .semibold))
-                            Text(L("立即发队首"))
-                                .font(.system(size: 10.5, weight: .medium))
+                    ToolActionButton(
+                        title: L("清空"),
+                        role: .secondary,
+                        height: 24,
+                        fontSize: 10.5,
+                        horizontalPadding: 9) {
+                            coordinator.clearQueue(for: pane)
                         }
-                        .foregroundStyle(AppStyle.accent)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3.5)
-                        .background(Capsule().fill(AppStyle.accent.opacity(0.13)))
-                        .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .help(L("不等 Stop，现在就发出第一条"))
+                    ToolActionButton(
+                        title: L("立即发队首"),
+                        systemImage: "paperplane.fill",
+                        role: .tinted(AppStyle.accent),
+                        height: 24,
+                        fontSize: 10.5,
+                        horizontalPadding: 9,
+                        help: L("不等 Stop，现在就发出第一条")) {
+                            coordinator.sendNextQueuedNow(for: pane)
+                        }
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 9)
+            .padding(.top, 8)
+            .padding(.bottom, 12)
         }
         .frame(width: 460)
         .conductorFloatingPanel(cornerRadius: Radius.xl)
@@ -146,13 +142,13 @@ private struct QueueRow: View {
                 .lineLimit(2)
             Spacer(minLength: 0)
             if hovering {
-                Button(action: onDelete) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 11))
-                        .foregroundStyle(AppStyle.textTertiary)
-                }
-                .buttonStyle(.plain)
-                .help(L("移出队列"))
+                IconOnlyButton(
+                    systemName: "xmark",
+                    help: L("移出队列"),
+                    size: 22,
+                    symbolSize: 10.5,
+                    tint: AppStyle.textTertiary,
+                    action: onDelete)
                 .transition(.opacity)
             }
         }

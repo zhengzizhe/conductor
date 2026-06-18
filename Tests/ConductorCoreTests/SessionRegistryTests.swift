@@ -1,6 +1,7 @@
 import XCTest
 @testable import ConductorCore
 
+@MainActor
 final class SessionRegistryTests: XCTestCase {
     func testCreateSurfaceUsesFactoryAndStartsAtCwd() {
         var made: [PaneID: FakeSurface] = [:]

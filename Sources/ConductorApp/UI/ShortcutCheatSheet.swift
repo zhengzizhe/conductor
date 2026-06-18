@@ -60,25 +60,21 @@ struct ShortcutCheatSheetView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 14)
-            .padding(.bottom, 10)
+            .padding(.bottom, 6)
 
-            Rectangle().fill(AppStyle.separator).frame(height: 1)
-
-            // 两列竖排（按注册顺序上下接续），一屏读完不滚动
+            // 两列竖排（按注册顺序上下接续），一屏读完不滚动；列间用间距分隔，不画线
             let mid = (items.count + 1) / 2
-            HStack(alignment: .top, spacing: 0) {
+            HStack(alignment: .top, spacing: 16) {
                 column(Array(items.prefix(mid)))
-                Rectangle().fill(AppStyle.separator).frame(width: 1)
                 column(Array(items.dropFirst(mid)))
             }
             .padding(.vertical, 6)
-
-            Rectangle().fill(AppStyle.separator).frame(height: 1)
+            .padding(.bottom, 4)
 
             HStack(spacing: 5) {
                 Image(systemName: "slider.horizontal.3")
                     .font(.system(size: 9, weight: .medium))
-                Text(L("键位可在设置（⌘,）或 config.yaml 里自定义"))
+                Text(L("键位可在设置里自定义"))
                     .font(.system(size: 10))
             }
             .foregroundStyle(AppStyle.textTertiary)
@@ -109,7 +105,7 @@ struct ShortcutCheatSheetView: View {
                 Circle()
                     .fill(AppStyle.accent)
                     .frame(width: 4, height: 4)
-                    .help(L("已在 config.yaml 自定义"))
+                    .help(L("已使用自定义键位"))
             }
             Spacer(minLength: 10)
             if let display = item.display {

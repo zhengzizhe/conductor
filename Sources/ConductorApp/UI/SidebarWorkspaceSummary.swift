@@ -6,6 +6,7 @@ struct SidebarWorkspaceSummary: Equatable {
     let metricsText: String
     let activeDetailText: String?
     let tooltipText: String
+    let tabCount: Int
     let paneCount: Int
 
     init(
@@ -34,6 +35,7 @@ struct SidebarWorkspaceSummary: Equatable {
         self.metricsText = metricsText
         self.activeDetailText = activeDetailText
         self.tooltipText = tooltipLines.joined(separator: "\n")
+        self.tabCount = tabCount
         self.paneCount = paneCount
     }
 
@@ -54,7 +56,5 @@ struct SidebarWorkspaceSummary: Equatable {
         return L("当前：%1$@ · %2$@", tabTitle, compactPath(cwd))
     }
 
-    private static func compactPath(_ path: String) -> String {
-        (path as NSString).abbreviatingWithTildeInPath
-    }
+    private static func compactPath(_ path: String) -> String { PathDisplay.tilde(path) }
 }

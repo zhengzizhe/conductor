@@ -68,12 +68,7 @@ public enum AgentSessionPreview {
         guard let lines = tailLines(filePath: filePath, tailBytes: tailBytes) else { return [] }
         var opts = AgentSessionLoadOptions.snippet
         opts.maxFileBytes = tailBytes
-        let texts: [(Role, String)]
-        switch agent {
-        case "claude": texts = parseClaude(lines, options: opts)
-        case "codex": texts = parseCodex(lines, options: opts)
-        default: return []
-        }
+        let texts = parseLines(agent: agent, lines, options: opts)
         return texts.suffix(limit).enumerated().map {
             AgentSessionMessage(id: $0.offset, role: $0.element.0, text: $0.element.1)
         }
@@ -88,10 +83,18 @@ public enum AgentSessionPreview {
     ) -> [(Role, String)] {
         var lines: [Data] = []
         forEachLine(filePath: filePath, maxBytes: maxBytes) { lines.append($0) }
+        return parseLines(agent: agent, lines, options: options)
+    }
+
+    /// 按 agent 选解析器；**未知/空 agent 自动探测**：先试 claude（其行格式不命中 codex 会回空），
+    /// 空了再试 codex。这样手动起的会话（没打 `CONDUCTOR_AGENT_ID` 标签）也能读到真实回复。
+    static func parseLines(agent: String, _ lines: [Data], options: AgentSessionLoadOptions) -> [(Role, String)] {
         switch agent {
         case "claude": return parseClaude(lines, options: options)
         case "codex": return parseCodex(lines, options: options)
-        default: return []
+        default:
+            let claude = parseClaude(lines, options: options)
+            return claude.isEmpty ? parseCodex(lines, options: options) : claude
         }
     }
 

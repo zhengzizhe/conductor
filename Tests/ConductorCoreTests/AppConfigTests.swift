@@ -14,6 +14,8 @@ final class AppConfigTests: XCTestCase {
         XCTAssertEqual(c.appearance.cursorStyle, "bar")
         XCTAssertEqual(c.terminal.scrollback, 60000)
         XCTAssertTrue(c.terminal.confirmCloseRunning)
+        XCTAssertTrue(c.terminal.autoResumeAgentSessions)
+        XCTAssertTrue(c.terminal.aiAgents.isEmpty)
         XCTAssertEqual(c.behavior.newTabCwd, "workspace")
         XCTAssertTrue(c.keybindings.isEmpty)
         XCTAssertTrue(c.ghosttyOverrides.isEmpty)
@@ -25,7 +27,12 @@ final class AppConfigTests: XCTestCase {
           "appearance": { "theme": "light", "font": { "family": "Menlo", "size": 16 },
                           "padding": { "x": 8, "y": 6 }, "cursorStyle": "block" },
           "terminal": { "shell": "/bin/bash", "scrollback": 5000, "copyOnSelect": true,
-                        "confirmCloseRunning": false },
+                        "confirmCloseRunning": false,
+                        "autoResumeAgentSessions": false,
+                        "aiAgents": [
+                          { "id": "codex", "title": "Codex", "command": "codex", "enabled": true },
+                          { "id": "local", "title": "Local Agent", "command": "local-agent", "enabled": false }
+                        ] },
           "behavior": { "restoreLayoutOnLaunch": false, "newTabCwd": "home" },
           "keybindings": { "newTab": "cmd+t" },
           "ghosttyOverrides": { "cursor-style": "block", "background-opacity": "0.92" },
@@ -39,6 +46,11 @@ final class AppConfigTests: XCTestCase {
         XCTAssertEqual(c.terminal.shell, "/bin/bash")
         XCTAssertEqual(c.terminal.scrollback, 5000)
         XCTAssertTrue(c.terminal.copyOnSelect)
+        XCTAssertFalse(c.terminal.autoResumeAgentSessions)
+        XCTAssertEqual(c.terminal.aiAgents.map(\.id), ["codex", "local"])
+        XCTAssertEqual(c.terminal.aiAgents[1].title, "Local Agent")
+        XCTAssertEqual(c.terminal.aiAgents[1].command, "local-agent")
+        XCTAssertFalse(c.terminal.aiAgents[1].enabled)
         XCTAssertFalse(c.behavior.restoreLayoutOnLaunch)
         XCTAssertEqual(c.behavior.newTabCwd, "home")
         XCTAssertEqual(c.keybindings["newTab"], "cmd+t")
@@ -84,6 +96,21 @@ final class AppConfigTests: XCTestCase {
         XCTAssertEqual(c.validated().terminal.scrollback, 60_000)
         c.terminal.scrollback = 99_000_000
         XCTAssertEqual(c.validated().terminal.scrollback, 1_000_000)
+    }
+
+    func testValidatedCleansAIAgents() {
+        var c = AppConfig.default
+        c.terminal.aiAgents = [
+            AIAgentConfig(id: " codex ", title: " Codex CLI ", command: " codex ", enabled: true),
+            AIAgentConfig(id: "codex", title: "Duplicate", command: "codex-beta", enabled: true),
+            AIAgentConfig(id: "empty-command", title: "Broken", command: " ", enabled: true),
+            AIAgentConfig(id: " ", title: "No ID", command: "agent", enabled: true),
+        ]
+
+        let agents = c.validated().terminal.aiAgents
+        XCTAssertEqual(agents, [
+            AIAgentConfig(id: "codex", title: "Codex CLI", command: "codex", enabled: true),
+        ])
     }
 
     func testValidatedFallsBackInvalidEnums() {

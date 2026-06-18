@@ -32,12 +32,6 @@ struct StatusBarView: View {
                 }
             }
             Spacer(minLength: 8)
-            BlockedInboxChip(coordinator: coordinator)
-            AgentHubChip(
-                thinking: coordinator.thinkingPanes.count,
-                unseenDone: coordinator.unseenDonePanes.count
-            ) { coordinator.revealNextAttentionPane() }
-            ActivityBellView(coordinator: coordinator, log: coordinator.activityLog)
             CodexUsageChip(snapshot: usageMonitor.codex) { coordinator.openTools(.usage) }
             TimelineView(.periodic(from: .now, by: 1)) { ctx in
                 Text(ctx.date.formatted(date: .omitted, time: .shortened))
@@ -49,11 +43,7 @@ struct StatusBarView: View {
         .padding(.horizontal, 12)
         .frame(height: 21)
         .frame(maxWidth: .infinity)
-        .background(AppStyle.windowBackground)
-        .overlay(alignment: .top) {
-            Rectangle().fill(AppStyle.separator).frame(height: 1)
-        }
-        .onAppear { usageMonitor.start() }
+        .background(.clear)   // 透明：用根底统一磨砂
     }
 
     private func item(_ icon: String, _ text: String, accent: Bool = false) -> some View {
@@ -114,60 +104,6 @@ private struct StatusCopyItem: View {
     }
 }
 
-/// 状态栏 Agent 活动中枢：思考中 / 完成未读两组计数，点击跳到下一个需要关注的 pane。
-/// 两个数都为零时整个 chip 隐身，不占状态栏地方。
-private struct AgentHubChip: View {
-    let thinking: Int
-    let unseenDone: Int
-    let onTap: () -> Void
-
-    @State private var hovering = false
-
-    var body: some View {
-        if thinking + unseenDone > 0 {
-            Button(action: onTap) {
-                HStack(spacing: 8) {
-                    if thinking > 0 {
-                        HStack(spacing: 3.5) {
-                            ThinkingIndicator(size: 7)
-                            Text("\(thinking)")
-                                .foregroundStyle(AppStyle.accent)
-                        }
-                    }
-                    if unseenDone > 0 {
-                        HStack(spacing: 3.5) {
-                            Circle()
-                                .fill(AppStyle.doneGreen)
-                                .frame(width: 6.5, height: 6.5)
-                                .shadow(color: AppStyle.doneGreen.opacity(0.55), radius: 2.5)
-                            Text("\(unseenDone)")
-                                .foregroundStyle(AppStyle.doneGreen)
-                        }
-                    }
-                }
-                .font(.system(size: 10.5, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-                .padding(.horizontal, 7)
-                .padding(.vertical, 2.5)
-                .background(Capsule().fill(hovering ? AppStyle.activeFill : AppStyle.hoverFill))
-                .contentShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            .onHover { hovering = $0 }
-            .help(tooltip)
-            .transition(.scale(scale: 0.85).combined(with: .opacity))
-            .animation(.easeOut(duration: 0.15), value: hovering)
-        }
-    }
-
-    private var tooltip: String {
-        var parts: [String] = []
-        if thinking > 0 { parts.append(L("%ld 个 Agent 思考中", thinking)) }
-        if unseenDone > 0 { parts.append(L("%ld 个已完成未读", unseenDone)) }
-        return parts.joined(separator: " · ") + "\n" + L("点击跳到下一个需要关注的终端")
-    }
-}
-
 /// 状态栏里的 Codex 配额小条：logo + 最紧张窗口的剩余百分比，点击打开 CLI 面板。
 private struct CodexUsageChip: View {
     let snapshot: CodexUsageSnapshot?
@@ -186,8 +122,8 @@ private struct CodexUsageChip: View {
     private func color(_ used: Int) -> Color {
         switch used {
         case ..<70: AppStyle.textSecondary
-        case 70..<90: Color(red: 0.95, green: 0.62, blue: 0.20)
-        default: Color(red: 0.92, green: 0.34, blue: 0.34)
+        case 70..<90: AppStyle.waitAmber
+        default: AppStyle.errorRed
         }
     }
 

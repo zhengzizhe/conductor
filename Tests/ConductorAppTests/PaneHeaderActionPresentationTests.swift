@@ -7,6 +7,6 @@ final class PaneHeaderActionPresentationTests: XCTestCase {
     }
 
     func testKeepsTextAndPathActionsInMoreMenu() {
-        XCTAssertEqual(PaneHeaderActionPresentation.moreActions, [.copy, .paste, .selectAll, .clear, .copyCwd, .openInFinder])
+        XCTAssertEqual(PaneHeaderActionPresentation.moreActions, [.copy, .paste, .selectAll, .clear, .copyCwd, .openInFinder, .exportText])
     }
 }

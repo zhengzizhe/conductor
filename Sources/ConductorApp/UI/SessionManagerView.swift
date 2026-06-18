@@ -15,7 +15,7 @@ struct SessionManagerView: View {
     private var scopePath: String? { coordinator.sessionScopePath }
     private var scopeLabel: String {
         if let path = scopePath {
-            return (path as NSString).abbreviatingWithTildeInPath
+            return PathDisplay.tilde(path)
         }
         return L("全部目录")
     }
@@ -43,16 +43,11 @@ struct SessionManagerView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Divider().overlay(AppStyle.separator)
             filterBar
-            Divider().overlay(AppStyle.separator)
             content
         }
         .frame(maxHeight: .infinity)
-        .background(AppStyle.windowBackground)
-        .overlay(alignment: .leading) {
-            Rectangle().fill(AppStyle.separator).frame(width: 1).allowsHitTesting(false)
-        }
+        .background(.clear)   // 透明：用根底统一磨砂
         .onAppear { store.refresh() }
     }
 
@@ -75,23 +70,22 @@ struct SessionManagerView: View {
                 }
             }
             Spacer(minLength: 8)
-            Button(action: { store.refresh(force: true) }) {
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(AppStyle.textSecondary)
-                    .frame(width: 26, height: 26)
-                    .background(Circle().fill(AppStyle.hoverFill))
-            }
-            .buttonStyle(PressScaleStyle())
+            IconOnlyButton(
+                systemName: "arrow.clockwise",
+                help: L("刷新会话"),
+                size: 28,
+                symbolSize: 11,
+                weight: .semibold) {
+                    store.refresh(force: true)
+                }
             .disabled(store.isLoading)
-            Button(action: onClose) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(AppStyle.textSecondary)
-                    .frame(width: 26, height: 26)
-                    .background(Circle().fill(AppStyle.hoverFill))
-            }
-            .buttonStyle(PressScaleStyle())
+            IconOnlyButton(
+                systemName: "xmark",
+                help: L("关闭"),
+                size: 28,
+                symbolSize: 11,
+                weight: .bold,
+                action: onClose)
         }
         .padding(.horizontal, 16)
         .padding(.top, 16)
@@ -118,7 +112,7 @@ struct SessionManagerView: View {
             .padding(.horizontal, 10)
             .frame(height: 30)
             .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                     .fill(AppStyle.hoverFill))
         }
         .padding(.horizontal, 16)
@@ -159,7 +153,7 @@ struct SessionManagerView: View {
                 : L("当前筛选条件下没有匹配的会话"))
         } else {
             ScrollView {
-                LazyVStack(spacing: 8) {
+                LazyVStack(spacing: 5) {
                     ForEach(filtered) { record in
                         SessionRow(record: record,
                                    isPinned: store.pinnedIDs.contains(record.id),
@@ -175,19 +169,12 @@ struct SessionManagerView: View {
     }
 
     private func emptyState(_ title: String, _ detail: String) -> some View {
-        VStack(spacing: 8) {
-            Image(systemName: "bubble.left.and.text.bubble.right")
-                .font(.system(size: 28))
-                .foregroundStyle(AppStyle.textTertiary)
-            Text(title)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(AppStyle.textSecondary)
-            Text(detail)
-                .font(.system(size: 11))
-                .foregroundStyle(AppStyle.textTertiary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 24)
-        }
+        ToolEmptyState(
+            icon: "bubble.left.and.text.bubble.right",
+            title: title,
+            detail: detail,
+            compact: true)
+        .padding(.horizontal, 24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
@@ -207,18 +194,18 @@ private struct SessionRow: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             Button(action: toggleExpanded) {
                 HStack(alignment: .top, spacing: 8) {
                     logo
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text(record.title)
-                            .font(.system(size: 12.5, weight: .semibold))
+                            .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(AppStyle.textPrimary)
-                            .lineLimit(2)
+                            .lineLimit(1)
                             .multilineTextAlignment(.leading)
                         if let cwd = record.cwd {
-                            Text((cwd as NSString).abbreviatingWithTildeInPath)
+                            Text(PathDisplay.tilde(cwd))
                                 .font(.system(size: 10.5))
                                 .foregroundStyle(AppStyle.textTertiary)
                                 .lineLimit(1)
@@ -258,32 +245,41 @@ private struct SessionRow: View {
 
             if expanded { previewSection }
 
-            HStack(spacing: 8) {
-                Button(L("当前面板")) { coordinator.resumeSession(record, inPane: coordinator.sessionTargetPane) }
-                    .buttonStyle(SecondaryButtonStyle())
-                    .disabled(coordinator.sessionTargetPane == nil)
-                Button(L("新标签")) { coordinator.resumeSession(record, inPane: nil) }
-                    .buttonStyle(PrimaryButtonStyle())
-                Menu {
-                    Button(L("复制会话 ID")) { coordinator.copyToClipboard(record.sessionID) }
-                    if let cmd = record.resumeCommand {
-                        Button(L("复制续聊命令")) { coordinator.copyToClipboard(cmd) }
+            // 操作行只在展开时出现，收着的行保持紧凑（点行即展开）。
+            if expanded {
+                HStack(spacing: 8) {
+                    Button(L("当前面板")) { coordinator.resumeSession(record, inPane: coordinator.sessionTargetPane) }
+                        .buttonStyle(SecondaryButtonStyle())
+                        .disabled(coordinator.sessionTargetPane == nil)
+                    Button(L("新标签")) { coordinator.resumeSession(record, inPane: nil) }
+                        .buttonStyle(PrimaryButtonStyle())
+                    Menu {
+                        Button { coordinator.copyToClipboard(record.sessionID) } label: {
+                            Label(L("复制会话 ID"), systemImage: "number")
+                        }
+                        if let cmd = record.resumeCommand {
+                            Button { coordinator.copyToClipboard(cmd) } label: {
+                                Label(L("复制续聊命令"), systemImage: "terminal")
+                            }
+                        }
+                        Divider()
+                        Button(role: .destructive) { confirmDelete() } label: {
+                            Label(L("删除会话…"), systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(AppStyle.textSecondary)
+                            .frame(width: 24, height: 24)
+                            .background(Circle().fill(AppStyle.hoverFill))
                     }
-                    Divider()
-                    Button(role: .destructive) { confirmDelete() } label: {
-                        Text(L("删除会话…"))
-                    }
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(AppStyle.textSecondary)
-                        .frame(width: 28, height: 28)
-                        .background(Circle().fill(AppStyle.hoverFill))
+                    .menuStyle(.borderlessButton)
+                    .help(L("更多操作"))
                 }
-                .menuStyle(.borderlessButton)
             }
         }
-        .padding(12)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
         .toolsCard()
         .onHover { hovering = $0 }
         .task(id: "\(record.filePath ?? "")#\(record.modifiedAt.timeIntervalSince1970)") {
@@ -300,7 +296,7 @@ private struct SessionRow: View {
             } label: {
                 Image(systemName: isPinned ? "star.fill" : "star")
                     .font(.system(size: 10.5, weight: .semibold))
-                    .foregroundStyle(isPinned ? Color.yellow.opacity(0.85) : AppStyle.textTertiary)
+                    .foregroundStyle(isPinned ? AppStyle.waitAmber : AppStyle.textTertiary)
                     .frame(width: 20, height: 20)
                     .contentShape(Rectangle())
             }
@@ -369,7 +365,7 @@ private struct SessionRow: View {
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = L("删除会话「%@」？", String(record.title.prefix(40)))
-        alert.informativeText = L("会删除磁盘上的会话日志文件，无法撤销。")
+        alert.informativeText = L("会删除这条本机会话记录，无法撤销。")
         alert.addButton(withTitle: L("删除"))
         alert.addButton(withTitle: L("取消"))
         alert.buttons.first?.hasDestructiveAction = true
@@ -426,7 +422,7 @@ private struct SessionRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)
         .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                 .fill(AppStyle.theme.isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03)))
         .transition(.opacity.combined(with: .move(edge: .top)))
     }

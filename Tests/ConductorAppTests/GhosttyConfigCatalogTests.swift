@@ -86,6 +86,47 @@ final class GhosttyConfigCatalogTests: XCTestCase {
     }
 
     @MainActor
+    func testGhosttyConfigTextIncludesAnsiPalette() {
+        let text = GhosttyRuntime.ghosttyConfigText(from: .default)
+        let paletteLines = text
+            .split(separator: "\n")
+            .filter { $0.hasPrefix("palette = ") }
+
+        XCTAssertEqual(paletteLines.count, 16)
+        XCTAssertTrue(text.contains("palette = 1=#ff6b6b"))
+        XCTAssertTrue(text.contains("palette = 4=#8aa9ff"))
+    }
+
+    @MainActor
+    func testGhosttyConfigTextUsesLightAnsiPalette() {
+        var config = AppConfig.default
+        config.appearance.theme = "light"
+
+        let text = GhosttyRuntime.ghosttyConfigText(from: config)
+
+        XCTAssertTrue(text.contains("foreground = 26272c"))
+        XCTAssertTrue(text.contains("palette = 1=#d1242f"))
+        XCTAssertTrue(text.contains("palette = 4=#0969da"))
+    }
+
+    @MainActor
+    func testGhosttyConfigTextUsesCustomAnsiPaletteWhenProvided() {
+        var config = AppConfig.default
+        config.appearance.theme = "custom"
+        config.appearance.colors = Colors(ansi: [
+            "#111111", "#222222", "#333333", "#444444",
+            "#555555", "#666666", "#777777", "#888888",
+            "#999999", "#aaaaaa", "#bbbbbb", "#cccccc",
+            "#dddddd", "#eeeeee", "#f0f0f0", "#fafafa",
+        ])
+
+        let text = GhosttyRuntime.ghosttyConfigText(from: config)
+
+        XCTAssertTrue(text.contains("palette = 0=#111111"))
+        XCTAssertTrue(text.contains("palette = 15=#fafafa"))
+    }
+
+    @MainActor
     func testGhosttyConfigTextAppliesBackgroundImageOverrides() {
         var config = AppConfig.default
         config.ghosttyOverrides = [
