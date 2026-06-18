@@ -70,11 +70,37 @@ enum AppLanguage {
     private static func applyRuntime(_ choice: String) {
         let code: String? = choice == system ? nil : choice
         let bundle = code
-            .flatMap { appModuleResources.path(forResource: $0, ofType: "lproj") }
-            .flatMap { Bundle(path: $0) }
+            .flatMap { appModuleResources.localizedResourceBundle(for: $0) }
         lock.lock()
         overrideBundle = bundle
         lock.unlock()
         ConductorCoreLocalization.setLanguageOverride(code)
+    }
+}
+
+private extension Bundle {
+    func localizedResourceBundle(for code: String) -> Bundle? {
+        let candidates = [code, code.lowercased()]
+        for candidate in candidates {
+            if let path = path(forResource: candidate, ofType: "lproj"),
+               let bundle = Bundle(path: path) {
+                return bundle
+            }
+        }
+
+        let normalizedCode = code.lowercased()
+        guard let resourcesURL = resourceURL,
+              let contents = try? FileManager.default.contentsOfDirectory(
+                at: resourcesURL,
+                includingPropertiesForKeys: nil
+              ) else {
+            return nil
+        }
+        return contents
+            .first { url in
+                url.pathExtension == "lproj"
+                    && url.deletingPathExtension().lastPathComponent.lowercased() == normalizedCode
+            }
+            .flatMap { Bundle(url: $0) }
     }
 }

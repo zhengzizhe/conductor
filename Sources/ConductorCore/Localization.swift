@@ -28,8 +28,7 @@ public enum ConductorCoreLocalization {
     /// 传 "en" / "zh-Hans" 强制指定语言；传 nil 恢复跟随进程启动时的协商结果。
     public static func setLanguageOverride(_ code: String?) {
         let bundle = code
-            .flatMap { conductorCoreResources.path(forResource: $0, ofType: "lproj") }
-            .flatMap { Bundle(path: $0) }
+            .flatMap { conductorCoreResources.localizedResourceBundle(for: $0) }
         lock.lock()
         overrideBundle = bundle
         lock.unlock()
@@ -54,4 +53,31 @@ func L(_ key: String, _ arguments: CVarArg...) -> String {
     String(
         format: ConductorCoreLocalization.activeBundle.localizedString(forKey: key, value: nil, table: nil),
         arguments: arguments)
+}
+
+private extension Bundle {
+    func localizedResourceBundle(for code: String) -> Bundle? {
+        let candidates = [code, code.lowercased()]
+        for candidate in candidates {
+            if let path = path(forResource: candidate, ofType: "lproj"),
+               let bundle = Bundle(path: path) {
+                return bundle
+            }
+        }
+
+        let normalizedCode = code.lowercased()
+        guard let resourcesURL = resourceURL,
+              let contents = try? FileManager.default.contentsOfDirectory(
+                at: resourcesURL,
+                includingPropertiesForKeys: nil
+              ) else {
+            return nil
+        }
+        return contents
+            .first { url in
+                url.pathExtension == "lproj"
+                    && url.deletingPathExtension().lastPathComponent.lowercased() == normalizedCode
+            }
+            .flatMap { Bundle(url: $0) }
+    }
 }
