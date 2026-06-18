@@ -1,0 +1,81 @@
+# /Users/dtfughdfdemoy/work/myTool/conductor/harness.yaml
+# 核心使命：驱动 Conductor 以核心可测、原生体验、真实终端和可脚本化自动化的方式演进
+
+project:
+  name: Conductor
+  type: macOS-multi-agent-terminal-workbench
+  runtime:
+    language: "Swift Package Manager, Swift tools 6.0, Swift language mode 5 for main targets"
+    platform: "macOS 14+"
+    app: "SwiftUI + AppKit"
+    terminal: "GhosttyKit binary target, libghostty, Metal"
+    cli: "conductorctl via Unix socket, batch, HTTP/WebSocket bridge, events"
+    docs: "docs/ and site/"
+
+workflow_stages:
+  - id: stage_1_init
+    name: "环境初始化"
+    actions:
+      - "sync_global_context"
+      - "identify_task_type"
+      - "init_task_workspace"
+    next: stage_2_product_and_technical_analysis
+
+  - id: stage_2_product_and_technical_analysis
+    name: "产品与技术分析"
+    actions:
+      - "define_user_scenario"
+      - "define_core_model"
+      - "define_automation_contract"
+      - "define_persistence_and_recovery"
+      - "generate_or_update_design_doc"
+    gate: "complex_task_requires_design_doc"
+    isolation: "产品探索阶段可共享上下文；进入架构设计时优先只携带冻结需求、项目规范和必要截图"
+    next: stage_3_decomposition
+
+  - id: stage_3_decomposition
+    name: "任务拆解"
+    actions:
+      - "generate_or_update_plan"
+      - "define_unit_and_integration_tests"
+      - "define_ui_and_cli_acceptance"
+      - "define_acceptance_commands"
+    isolation: "架构与计划冻结后，进入编码实现前应只携带冻结设计、任务计划和必要规则"
+    next: stage_4_atomic_coding
+
+  - id: stage_4_atomic_coding
+    name: "核心驱动编码"
+    strategy:
+      mode: "core_first_when_possible"
+      auto_commit: false
+    actions:
+      - "implement_conductor_core_model"
+      - "implement_app_or_cli_surface"
+      - "write_or_update_tests"
+      - "run_acceptance_commands"
+      - "update_docs_and_plan"
+    isolation: "代码阶段结束后，进入 QA / 攻击测试前默认只携带代码入口、测试入口、运行方式和验收标准"
+    next: stage_5_qa_ship
+
+  - id: stage_5_qa_ship
+    name: "能力交付"
+    actions:
+      - "run_verification"
+      - "capture_ui_evidence_when_needed"
+      - "update_plan_status"
+      - "report_verification_and_risks"
+
+action_definitions:
+  sync_global_context: "读取 AGENTS.md、PLANS.md、harness.yaml、GOAL.md 和当前任务相关 docs"
+  identify_task_type: "判定任务属于 Core、App、CLI、Automation、Terminal、Docs、Site、Packaging 或 Fix"
+  init_task_workspace: "确认 git 状态和任务边界；避免覆盖用户已有改动"
+  define_core_model: "优先确认 ConductorCore 中的模型、reducer、协议、状态流转和可测试边界"
+  define_automation_contract: "涉及 AI/脚本可调用能力时，定义 socket/RPC/CLI JSON 输入输出、稳定 ID 和错误信息"
+  define_persistence_and_recovery: "确认状态持久化、旧数据兼容、异常退出恢复和用户数据风险"
+  generate_or_update_design_doc: "复杂任务更新 docs/、docs/superpowers/specs/ 或相关设计文档"
+  generate_or_update_plan: "复杂任务更新 docs/superpowers/plans/ 或 PLANS.md 中的任务状态"
+  define_unit_and_integration_tests: "为 ConductorCore、ConductorApp、CLI 或脚本确定最小但充分的测试集合"
+  define_ui_and_cli_acceptance: "涉及 UI 或自动化时，同时说明 GUI 和 conductorctl/socket 验收路径"
+  run_acceptance_commands: "按改动范围运行 swift build、swift test、过滤测试、Scripts/test-conductorctl.sh 或打包脚本"
+  capture_ui_evidence_when_needed: "新增或明显改变 UI 时，启动 dev app 或渲染测试并留下截图或说明无法截图的原因"
+  prompt_session_switch: "当阶段结束且下一阶段应隔离上下文时，提示用户切换新会话，并列出应携带的冻结产物和不应携带的历史讨论"
