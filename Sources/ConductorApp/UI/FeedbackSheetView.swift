@@ -3,6 +3,7 @@ import SwiftUI
 
 struct FeedbackSheetView: View {
     var onClose: () -> Void
+    var onSubmitFinished: (_ succeeded: Bool, _ message: String) -> Void
 
     @ObservedObject private var configStore = ConfigStore.shared
     @State private var email = ""
@@ -79,7 +80,7 @@ struct FeedbackSheetView: View {
     private var appFeedback: some View {
         VStack(alignment: .leading, spacing: 12) {
             sectionTitle(L("应用内反馈"), icon: "paperplane")
-            Text(L("用于留下邮箱和问题描述，方便后续功能上新或相关版本发布时通知你。当前仅预留提交接口，暂不接后端。"))
+            Text(L("用于留下邮箱和问题描述，方便后续功能上新或相关版本发布时通知你。提交会发送到应用内配置的反馈接口。"))
                 .font(.system(size: 11.5))
                 .lineSpacing(3)
                 .foregroundStyle(AppStyle.textSecondary)
@@ -225,12 +226,16 @@ struct FeedbackSheetView: View {
                 try await client.submit(request)
                 await MainActor.run {
                     isSubmitting = false
-                    statusText = L("已通过校验；提交接口已预留，后端接入后会发送到配置的 domain。")
+                    onClose()
+                    onSubmitFinished(true, L("反馈提交成功"))
                 }
             } catch {
                 await MainActor.run {
                     isSubmitting = false
-                    statusText = L("提交失败：%@", error.localizedDescription)
+                    NSLog("[conductor] feedback submit failed: \(error.localizedDescription)")
+                    let message = error.feedbackUserMessage
+                    statusText = message
+                    onSubmitFinished(false, message)
                 }
             }
         }

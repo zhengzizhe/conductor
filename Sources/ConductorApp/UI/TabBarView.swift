@@ -159,6 +159,13 @@ struct TabBarView: View {
         .sheet(isPresented: $isFeedbackPresented) {
             FeedbackSheetView {
                 isFeedbackPresented = false
+            } onSubmitFinished: { succeeded, message in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    ToastHUD.shared.show(
+                        message,
+                        icon: succeeded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
+                        over: NSApp.keyWindow ?? NSApp.mainWindow)
+                }
             }
         }
         .onChange(of: renameFocused) { _, focused in
