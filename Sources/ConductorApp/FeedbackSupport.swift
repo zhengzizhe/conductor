@@ -143,7 +143,7 @@ private struct DynamicCodingKey: CodingKey {
 struct FeedbackClient {
     static let defaultDomain = "http://zzzplus.cloud"
     static let releaseURL = URL(string: "https://github.com/zhengzizhe/conductor/releases/latest")!
-    static let updateChannel = "manual-github-release"
+    static let updateChannel = "github-release-relaunch"
 
     var endpoint: FeedbackEndpoint
     var transport: (URLRequest) async throws -> Void

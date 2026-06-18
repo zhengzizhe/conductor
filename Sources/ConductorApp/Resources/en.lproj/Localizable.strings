@@ -635,6 +635,8 @@
 "取消下载" = "Cancel Download";
 "v%@ 已下载完成" = "v%@ downloaded";
 "打开 DMG 后把 Conductor 拖进 Applications 即完成更新。" = "Open the DMG and drag Conductor into Applications to finish updating.";
+"点击安装后 Conductor 会退出、替换为新版并重新打开。未签名或权限受限时，macOS 可能仍会要求确认。" = "After installation starts, Conductor quits, replaces itself with the new version, and reopens. macOS may still ask for confirmation when the app is unsigned or permissions are restricted.";
+"安装并重启" = "Install and Relaunch";
 "打开安装包" = "Open Installer";
 "在访达中显示" = "Reveal in Finder";
 "自动检查更新" = "Check for updates automatically";
@@ -1488,7 +1490,7 @@
 "当前版本" = "Current version";
 "Release 链接" = "Release link";
 "自动更新方式" = "Update method";
-"当前通过 GitHub Releases 手动下载更新；自动更新接入后会沿用这里的版本通知信息。" = "Updates are currently downloaded manually from GitHub Releases. When automatic updates are added, this version notification metadata will be reused.";
+"当前通过 GitHub Releases 下载更新；下载完成后可一键安装并重启。" = "Updates are downloaded from GitHub Releases. After download, Conductor can install the update and relaunch.";
 "提交中…" = "Submitting…";
 "提交应用内反馈" = "Submit in-app feedback";
 "反馈提交成功" = "Feedback submitted";

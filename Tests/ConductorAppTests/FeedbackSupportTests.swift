@@ -22,7 +22,7 @@ final class FeedbackSupportTests: XCTestCase {
             message: "The app feedback form should keep GitHub Issue separate.",
             appVersion: "1.2.3",
             releaseURL: URL(string: "https://github.com/zhengzizhe/conductor/releases/latest")!,
-            updateChannel: "manual-github-release"
+            updateChannel: "github-release-relaunch"
         )
 
         let urlRequest = try endpoint.makeURLRequest(for: request)
@@ -36,7 +36,7 @@ final class FeedbackSupportTests: XCTestCase {
         XCTAssertEqual(json["message"], "The app feedback form should keep GitHub Issue separate.")
         XCTAssertEqual(json["appVersion"], "1.2.3")
         XCTAssertEqual(json["releaseURL"], "https://github.com/zhengzizhe/conductor/releases/latest")
-        XCTAssertEqual(json["updateChannel"], "manual-github-release")
+        XCTAssertEqual(json["updateChannel"], "github-release-relaunch")
     }
 
     func testResponseProtocolRequiresBusinessSuccessCode() throws {

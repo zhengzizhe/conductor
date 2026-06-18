@@ -49,7 +49,7 @@ Request payload:
   "message": "Issue details from the in-app feedback dialog.",
   "appVersion": "1.2.3 (45)",
   "releaseURL": "https://github.com/zhengzizhe/conductor/releases/latest",
-  "updateChannel": "manual-github-release"
+  "updateChannel": "github-release-relaunch"
 }
 ```
 
@@ -70,6 +70,6 @@ Response payload uses the shared three-part shape:
 Current update metadata is explicit:
 
 - `releaseURL`: `https://github.com/zhengzizhe/conductor/releases/latest`
-- `updateChannel`: `manual-github-release`
+- `updateChannel`: `github-release-relaunch`
 
-When automatic updates are added, update `FeedbackClient.updateChannel` and the localized update-method copy in `FeedbackSheetView`.
+Updates are downloaded from GitHub Releases. After the DMG is downloaded, Conductor can launch its bundled updater helper, quit, replace the current `.app`, and reopen the updated app.

@@ -144,6 +144,20 @@ final class UpdateManager: ObservableObject {
         NSWorkspace.shared.activateFileViewerSelecting([localURL])
     }
 
+    func installDownloadedAndRestart() {
+        guard case .downloaded(_, let localURL) = phase else { return }
+        do {
+            let plan = try UpdateInstallerPlan.bundled(dmgURL: localURL)
+            let process = Process()
+            process.executableURL = plan.executableURL
+            process.arguments = plan.arguments
+            try process.run()
+            NSApp.terminate(nil)
+        } catch {
+            phase = .failed(error.localizedDescription)
+        }
+    }
+
     private func scheduleAutoCheck() {
         autoCheckTimer?.invalidate()
         let timer = Timer(timeInterval: Self.autoCheckInterval, repeats: true) { _ in

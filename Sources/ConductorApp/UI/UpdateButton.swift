@@ -165,13 +165,19 @@ private struct UpdatePopover: View {
             } icon: {
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(AppStyle.doneGreen)
             }
-            Text(L("打开 DMG 后把 Conductor 拖进 Applications 即完成更新。"))
+            Text(L("点击安装后 Conductor 会退出、替换为新版并重新打开。未签名或权限受限时，macOS 可能仍会要求确认。"))
                 .font(.system(size: 11))
                 .foregroundStyle(AppStyle.textTertiary)
             HStack(spacing: 8) {
                 ToolActionButton(
-                    title: L("打开安装包"),
+                    title: L("安装并重启"),
+                    systemImage: "arrow.triangle.2.circlepath",
                     role: .primary,
+                    height: 24,
+                    fontSize: 11) { updater.installDownloadedAndRestart() }
+                ToolActionButton(
+                    title: L("打开安装包"),
+                    role: .secondary,
                     height: 24,
                     fontSize: 11) { updater.openDownloaded() }
                 ToolActionButton(
