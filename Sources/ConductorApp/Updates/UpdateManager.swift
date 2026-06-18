@@ -17,6 +17,12 @@ final class UpdateManager: ObservableObject {
         let assetSize: Int64
     }
 
+    struct InstallPrompt: Identifiable, Equatable {
+        let version: String
+
+        var id: String { version }
+    }
+
     enum Phase: Equatable {
         case idle
         case checking
@@ -29,6 +35,7 @@ final class UpdateManager: ObservableObject {
 
     @Published private(set) var phase: Phase = .idle
     @Published private(set) var downloadProgress: Double = 0
+    @Published var installPrompt: InstallPrompt?
     @Published var autoCheckEnabled: Bool {
         didSet {
             UserDefaults.standard.set(autoCheckEnabled, forKey: "update.autoCheck")
@@ -49,6 +56,7 @@ final class UpdateManager: ObservableObject {
     private var downloadTask: URLSessionDownloadTask?
     private var progressObservation: NSKeyValueObservation?
     private var autoCheckTimer: Timer?
+    private let pendingUpdateStore = PendingUpdateStore()
     /// 自动检测间隔：6 小时。
     private static let autoCheckInterval: TimeInterval = 6 * 60 * 60
 
@@ -118,6 +126,7 @@ final class UpdateManager: ObservableObject {
                     try? FileManager.default.removeItem(at: dest)
                     try FileManager.default.moveItem(at: temp, to: dest)
                     self.phase = .downloaded(release, localURL: dest)
+                    self.installPrompt = InstallPrompt(version: release.version)
                 } catch {
                     self.phase = .failed(error.localizedDescription)
                 }
@@ -142,6 +151,47 @@ final class UpdateManager: ObservableObject {
     func revealDownloaded() {
         guard case .downloaded(_, let localURL) = phase else { return }
         NSWorkspace.shared.activateFileViewerSelecting([localURL])
+    }
+
+    func installDownloadedAndRestart() {
+        guard case .downloaded(_, let localURL) = phase else { return }
+        pendingUpdateStore.clear()
+        installPrompt = nil
+        launchInstaller(dmgURL: localURL, reopenAfterInstall: true, terminateApp: true)
+    }
+
+    func installDownloadedLater() {
+        guard case .downloaded(let release, let localURL) = phase else { return }
+        pendingUpdateStore.save(PendingUpdate(version: release.version, dmgPath: localURL.path))
+        installPrompt = nil
+    }
+
+    func installPendingUpdateOnQuitIfNeeded() {
+        guard let pending = pendingUpdateStore.load() else { return }
+        let dmgURL = URL(fileURLWithPath: pending.dmgPath)
+        guard FileManager.default.fileExists(atPath: dmgURL.path) else {
+            pendingUpdateStore.clear()
+            return
+        }
+        pendingUpdateStore.clear()
+        launchInstaller(dmgURL: dmgURL, reopenAfterInstall: false, terminateApp: false)
+    }
+
+    private func launchInstaller(dmgURL: URL, reopenAfterInstall: Bool, terminateApp: Bool) {
+        do {
+            let plan = try UpdateInstallerPlan.bundled(
+                dmgURL: dmgURL,
+                reopenAfterInstall: reopenAfterInstall)
+            let process = Process()
+            process.executableURL = plan.executableURL
+            process.arguments = plan.arguments
+            try process.run()
+            if terminateApp {
+                NSApp.terminate(nil)
+            }
+        } catch {
+            phase = .failed(error.localizedDescription)
+        }
     }
 
     private func scheduleAutoCheck() {

@@ -8,6 +8,7 @@ let package = Package(
     products: [
         .library(name: "ConductorCore", targets: ["ConductorCore"]),
         .executable(name: "ConductorApp", targets: ["ConductorApp"]),
+        .executable(name: "ConductorUpdater", targets: ["ConductorUpdater"]),
         .executable(name: "conductorctl", targets: ["ConductorCLI"]),
     ],
     dependencies: [
@@ -40,6 +41,15 @@ let package = Package(
             ],
             swiftSettings: [
                 .swiftLanguageMode(.v5),
+            ]
+        ),
+        .executableTarget(
+            name: "ConductorUpdater",
+            swiftSettings: [
+                .swiftLanguageMode(.v5),
+            ],
+            linkerSettings: [
+                .linkedFramework("AppKit"),
             ]
         ),
 

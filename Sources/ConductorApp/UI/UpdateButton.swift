@@ -25,6 +25,17 @@ struct UpdateButton: View {
         .popover(isPresented: $showPopover, arrowEdge: .bottom) {
             UpdatePopover(updater: updater)
         }
+        .alert(item: $updater.installPrompt) { prompt in
+            Alert(
+                title: Text(L("v%@ 已下载完成", prompt.version)),
+                message: Text(L("是否现在重启并安装？选择稍后时，Conductor 会在退出后安装，下次打开就是新版本。")),
+                primaryButton: .default(Text(L("重启并安装"))) {
+                    updater.installDownloadedAndRestart()
+                },
+                secondaryButton: .cancel(Text(L("稍后"))) {
+                    updater.installDownloadedLater()
+                })
+        }
     }
 }
 
@@ -165,13 +176,19 @@ private struct UpdatePopover: View {
             } icon: {
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(AppStyle.doneGreen)
             }
-            Text(L("打开 DMG 后把 Conductor 拖进 Applications 即完成更新。"))
+            Text(L("可以现在重启安装，也可以稍后退出时自动安装；未签名或权限受限时，macOS 可能仍会要求确认。"))
                 .font(.system(size: 11))
                 .foregroundStyle(AppStyle.textTertiary)
             HStack(spacing: 8) {
                 ToolActionButton(
-                    title: L("打开安装包"),
+                    title: L("安装并重启"),
+                    systemImage: "arrow.triangle.2.circlepath",
                     role: .primary,
+                    height: 24,
+                    fontSize: 11) { updater.installDownloadedAndRestart() }
+                ToolActionButton(
+                    title: L("打开安装包"),
+                    role: .secondary,
                     height: 24,
                     fontSize: 11) { updater.openDownloaded() }
                 ToolActionButton(

@@ -635,6 +635,12 @@
 "取消下载" = "Cancel Download";
 "v%@ 已下载完成" = "v%@ downloaded";
 "打开 DMG 后把 Conductor 拖进 Applications 即完成更新。" = "Open the DMG and drag Conductor into Applications to finish updating.";
+"点击安装后 Conductor 会退出、替换为新版并重新打开。未签名或权限受限时，macOS 可能仍会要求确认。" = "After installation starts, Conductor quits, replaces itself with the new version, and reopens. macOS may still ask for confirmation when the app is unsigned or permissions are restricted.";
+"是否现在重启并安装？选择稍后时，Conductor 会在退出后安装，下次打开就是新版本。" = "Restart and install now? If you choose Later, Conductor will install after it quits, so the next launch opens the new version.";
+"重启并安装" = "Restart and Install";
+"稍后" = "Later";
+"可以现在重启安装，也可以稍后退出时自动安装；未签名或权限受限时，macOS 可能仍会要求确认。" = "You can restart and install now, or install automatically when Conductor quits later. macOS may still ask for confirmation when the app is unsigned or permissions are restricted.";
+"安装并重启" = "Install and Relaunch";
 "打开安装包" = "Open Installer";
 "在访达中显示" = "Reveal in Finder";
 "自动检查更新" = "Check for updates automatically";

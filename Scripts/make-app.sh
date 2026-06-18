@@ -10,6 +10,8 @@ cd "$ROOT"
 
 echo "==> swift build -c $CONFIG --product ConductorApp"
 swift build -c "$CONFIG" --product ConductorApp
+echo "==> swift build -c $CONFIG --product ConductorUpdater"
+swift build -c "$CONFIG" --product ConductorUpdater
 echo "==> swift build -c $CONFIG --product conductorctl"
 swift build -c "$CONFIG" --product conductorctl
 
@@ -22,6 +24,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
 cp "$BIN_DIR/ConductorApp" "$APP/Contents/MacOS/ConductorApp"
+cp "$BIN_DIR/ConductorUpdater" "$APP/Contents/MacOS/ConductorUpdater"
 cp "$BIN_DIR/conductorctl" "$APP/Contents/MacOS/conductorctl"
 
 # SwiftPM 资源 bundle（logo、本地化文案等）放到 Resources/，Bundle.module 会在 main bundle
@@ -99,6 +102,7 @@ SIGN_IDENTITY="${CONDUCTOR_SIGN_IDENTITY:-Conductor Dev}"
 
 if security find-identity -v -p codesigning 2>/dev/null | grep -qF "$SIGN_IDENTITY"; then
   echo "==> 用稳定签名身份「${SIGN_IDENTITY}」签名"
+  codesign --force --sign "$SIGN_IDENTITY" "$APP/Contents/MacOS/ConductorUpdater"
   codesign --force --sign "$SIGN_IDENTITY" "$APP/Contents/MacOS/conductorctl"
   if [ -f "$ROOT/Conductor.entitlements" ]; then
     codesign --force --sign "$SIGN_IDENTITY" --entitlements "$ROOT/Conductor.entitlements" "$APP"
@@ -111,6 +115,8 @@ else
   echo "    根治：先运行一次  Scripts/make-dev-cert.sh  再重新打包。"
   codesign --force --sign - "$APP/Contents/MacOS/conductorctl" >/dev/null 2>&1 || \
     echo "    (conductorctl codesign 失败，可忽略)"
+  codesign --force --sign - "$APP/Contents/MacOS/ConductorUpdater" >/dev/null 2>&1 || \
+    echo "    (ConductorUpdater codesign 失败，可忽略)"
   codesign --force --sign - "$APP" >/dev/null 2>&1 || \
     echo "    (codesign 失败，可忽略)"
 fi
