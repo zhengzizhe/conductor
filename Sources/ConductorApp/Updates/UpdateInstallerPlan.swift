@@ -75,13 +75,16 @@ struct UpdateInstallerPlan: Equatable {
     }
 
     static func currentAppURL(executableURL: URL) throws -> URL {
-        let standardized = executableURL.standardizedFileURL
-        let components = standardized.pathComponents
-        guard let appIndex = components.lastIndex(where: { $0.hasSuffix(".app") }) else {
-            throw UpdateInstallerPlanError.appBundleNotFound
+        var candidate = executableURL.standardizedFileURL
+        while candidate.path != "/" {
+            if candidate.pathExtension == "app" {
+                return candidate
+            }
+            let parent = candidate.deletingLastPathComponent()
+            guard parent.path != candidate.path else { break }
+            candidate = parent
         }
-        let appPath = components[0...appIndex].joined(separator: "/")
-        return URL(fileURLWithPath: appPath.isEmpty ? "/" : appPath)
+        throw UpdateInstallerPlanError.appBundleNotFound
     }
 }
 

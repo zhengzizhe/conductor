@@ -7,7 +7,7 @@ enum UpdaterError: Error, CustomStringConvertible {
     case invalidPath(String)
     case commandFailed(String, Int32, String)
     case mountPointNotFound
-    case sourceAppNotFound(URL, String)
+    case sourceAppNotFound(URL, String, String)
     case appStillRunning(String)
 
     var description: String {
@@ -22,12 +22,17 @@ enum UpdaterError: Error, CustomStringConvertible {
             return "\(command) failed with status \(status): \(stderr)"
         case .mountPointNotFound:
             return "Mounted DMG did not report a mount point"
-        case .sourceAppNotFound(let mountPoint, let name):
-            return "Could not find \(name) in \(mountPoint.path)"
+        case .sourceAppNotFound(let mountPoint, let name, let bundleIdentifier):
+            return "Could not find \(name) with bundle id \(bundleIdentifier) in \(mountPoint.path)"
         case .appStillRunning(let bundleID):
             return "\(bundleID) is still running"
         }
     }
+}
+
+private enum PendingUpdateDefaultsKey {
+    static let version = "update.pending.version"
+    static let dmgPath = "update.pending.dmgPath"
 }
 
 struct UpdaterArguments {
@@ -108,19 +113,20 @@ func mountDMG(_ dmgURL: URL) throws -> URL {
     throw UpdaterError.mountPointNotFound
 }
 
-func sourceApp(in mountPoint: URL, matching targetName: String) throws -> URL {
+func sourceApp(in mountPoint: URL, matching targetName: String, bundleIdentifier: String) throws -> URL {
     let urls = try FileManager.default.contentsOfDirectory(
         at: mountPoint,
         includingPropertiesForKeys: [.isDirectoryKey],
         options: [.skipsHiddenFiles])
     let apps = urls.filter { $0.pathExtension == "app" }
-    if let exact = apps.first(where: { $0.lastPathComponent == targetName }) {
+    let matchingApps = apps.filter { Bundle(url: $0)?.bundleIdentifier == bundleIdentifier }
+    if let exact = matchingApps.first(where: { $0.lastPathComponent == targetName }) {
         return exact
     }
-    if let first = apps.first {
+    if let first = matchingApps.first {
         return first
     }
-    throw UpdaterError.sourceAppNotFound(mountPoint, targetName)
+    throw UpdaterError.sourceAppNotFound(mountPoint, targetName, bundleIdentifier)
 }
 
 func waitForAppToExit(bundleIdentifier: String, timeout: TimeInterval) throws {
@@ -160,6 +166,38 @@ func replaceApp(sourceAppURL: URL, targetAppURL: URL) throws {
     }
 }
 
+func clearPendingUpdate(bundleIdentifier: String) {
+    guard let defaults = UserDefaults(suiteName: bundleIdentifier) else { return }
+    defaults.removeObject(forKey: PendingUpdateDefaultsKey.version)
+    defaults.removeObject(forKey: PendingUpdateDefaultsKey.dmgPath)
+    defaults.synchronize()
+}
+
+func writeFailureLog(_ message: String) {
+    guard let libraryURL = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first else {
+        return
+    }
+    let logURL = libraryURL
+        .appendingPathComponent("Logs")
+        .appendingPathComponent("ConductorUpdater.log")
+    let line = "\(Date()) \(message)\n"
+    do {
+        try FileManager.default.createDirectory(
+            at: logURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true)
+        if FileManager.default.fileExists(atPath: logURL.path) {
+            let handle = try FileHandle(forWritingTo: logURL)
+            handle.seekToEndOfFile()
+            handle.write(Data(line.utf8))
+            try? handle.close()
+        } else {
+            try Data(line.utf8).write(to: logURL, options: .atomic)
+        }
+    } catch {
+        // Stderr is still written by the caller; logging must never mask the install error.
+    }
+}
+
 func install(_ arguments: UpdaterArguments) throws {
     guard FileManager.default.fileExists(atPath: arguments.dmgURL.path) else {
         throw UpdaterError.invalidPath(arguments.dmgURL.path)
@@ -167,9 +205,13 @@ func install(_ arguments: UpdaterArguments) throws {
     let mountPoint = try mountDMG(arguments.dmgURL)
     defer { _ = try? run("/usr/bin/hdiutil", ["detach", mountPoint.path, "-quiet"]) }
 
-    let source = try sourceApp(in: mountPoint, matching: arguments.targetAppURL.lastPathComponent)
+    let source = try sourceApp(
+        in: mountPoint,
+        matching: arguments.targetAppURL.lastPathComponent,
+        bundleIdentifier: arguments.bundleIdentifier)
     try waitForAppToExit(bundleIdentifier: arguments.bundleIdentifier, timeout: 60)
     try replaceApp(sourceAppURL: source, targetAppURL: arguments.targetAppURL)
+    clearPendingUpdate(bundleIdentifier: arguments.bundleIdentifier)
     if arguments.reopenAfterInstall {
         try run("/usr/bin/open", [arguments.targetAppURL.path])
     }
@@ -177,9 +219,21 @@ func install(_ arguments: UpdaterArguments) throws {
 
 do {
     let arguments = try UpdaterArguments.parse(Array(CommandLine.arguments.dropFirst()))
-    try install(arguments)
+    do {
+        try install(arguments)
+    } catch {
+        let message = "[ConductorUpdater] \(error)"
+        writeFailureLog(message)
+        if arguments.reopenAfterInstall,
+           FileManager.default.fileExists(atPath: arguments.targetAppURL.path) {
+            _ = try? run("/usr/bin/open", [arguments.targetAppURL.path])
+        }
+        FileHandle.standardError.write(Data((message + "\n").utf8))
+        exit(1)
+    }
 } catch {
-    let message = "[ConductorUpdater] \(error)\n"
-    FileHandle.standardError.write(Data(message.utf8))
+    let message = "[ConductorUpdater] \(error)"
+    writeFailureLog(message)
+    FileHandle.standardError.write(Data((message + "\n").utf8))
     exit(1)
 }

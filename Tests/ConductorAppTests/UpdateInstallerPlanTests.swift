@@ -46,6 +46,7 @@ final class UpdateInstallerPlanTests: XCTestCase {
         let appURL = try UpdateInstallerPlan.currentAppURL(executableURL: executable)
 
         XCTAssertEqual(appURL.path, "/Applications/Conductor.app")
+        XCTAssertFalse(appURL.path.hasPrefix("//"))
     }
 
     func testCurrentAppURLRejectsNonBundleExecutables() {

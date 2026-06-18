@@ -173,11 +173,11 @@ final class UpdateManager: ObservableObject {
             pendingUpdateStore.clear()
             return
         }
-        pendingUpdateStore.clear()
         launchInstaller(dmgURL: dmgURL, reopenAfterInstall: false, terminateApp: false)
     }
 
-    private func launchInstaller(dmgURL: URL, reopenAfterInstall: Bool, terminateApp: Bool) {
+    @discardableResult
+    private func launchInstaller(dmgURL: URL, reopenAfterInstall: Bool, terminateApp: Bool) -> Bool {
         do {
             let plan = try UpdateInstallerPlan.bundled(
                 dmgURL: dmgURL,
@@ -189,8 +189,10 @@ final class UpdateManager: ObservableObject {
             if terminateApp {
                 NSApp.terminate(nil)
             }
+            return true
         } catch {
             phase = .failed(error.localizedDescription)
+            return false
         }
     }
 
