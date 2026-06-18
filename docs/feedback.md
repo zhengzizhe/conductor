@@ -72,4 +72,4 @@ Current update metadata is explicit:
 - `releaseURL`: `https://github.com/zhengzizhe/conductor/releases/latest`
 - `updateChannel`: `github-release-relaunch`
 
-Updates are downloaded from GitHub Releases. After the DMG is downloaded, Conductor can launch its bundled updater helper, quit, replace the current `.app`, and reopen the updated app.
+Updates are downloaded from GitHub Releases. After the DMG is downloaded, Conductor can either restart immediately and reopen the updated app, or record a pending update and replace the current `.app` after the user quits so the next launch opens the updated version.

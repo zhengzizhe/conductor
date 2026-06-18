@@ -145,6 +145,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         coordinator.captureAllScrollbackForRestart()   // 内容快照（下次启动回放）
         coordinator.save()
+        UpdateManager.shared.installPendingUpdateOnQuitIfNeeded()
     }
 }
 

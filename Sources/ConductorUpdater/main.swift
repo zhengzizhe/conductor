@@ -34,15 +34,17 @@ struct UpdaterArguments {
     let dmgURL: URL
     let targetAppURL: URL
     let bundleIdentifier: String
+    let reopenAfterInstall: Bool
 
     static func parse(_ raw: [String]) throws -> UpdaterArguments {
         var dmgPath: String?
         var targetPath: String?
         var bundleID: String?
+        var reopenAfterInstall = true
         var index = 0
         while index < raw.count {
             let name = raw[index]
-            guard ["--dmg", "--target-app", "--bundle-id"].contains(name) else {
+            guard ["--dmg", "--target-app", "--bundle-id", "--reopen"].contains(name) else {
                 throw UpdaterError.unknownArgument(name)
             }
             let valueIndex = index + 1
@@ -53,6 +55,7 @@ struct UpdaterArguments {
             case "--dmg": dmgPath = raw[valueIndex]
             case "--target-app": targetPath = raw[valueIndex]
             case "--bundle-id": bundleID = raw[valueIndex]
+            case "--reopen": reopenAfterInstall = raw[valueIndex] != "false"
             default: break
             }
             index += 2
@@ -63,7 +66,8 @@ struct UpdaterArguments {
         return UpdaterArguments(
             dmgURL: URL(fileURLWithPath: dmgPath),
             targetAppURL: URL(fileURLWithPath: targetPath),
-            bundleIdentifier: bundleID)
+            bundleIdentifier: bundleID,
+            reopenAfterInstall: reopenAfterInstall)
     }
 }
 
@@ -166,7 +170,9 @@ func install(_ arguments: UpdaterArguments) throws {
     let source = try sourceApp(in: mountPoint, matching: arguments.targetAppURL.lastPathComponent)
     try waitForAppToExit(bundleIdentifier: arguments.bundleIdentifier, timeout: 60)
     try replaceApp(sourceAppURL: source, targetAppURL: arguments.targetAppURL)
-    try run("/usr/bin/open", [arguments.targetAppURL.path])
+    if arguments.reopenAfterInstall {
+        try run("/usr/bin/open", [arguments.targetAppURL.path])
+    }
 }
 
 do {

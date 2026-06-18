@@ -22,6 +22,7 @@ struct UpdateInstallerPlan: Equatable {
     let currentAppURL: URL
     let helperURL: URL
     let bundleIdentifier: String
+    let reopenAfterInstall: Bool
 
     var executableURL: URL { helperURL }
 
@@ -30,17 +31,29 @@ struct UpdateInstallerPlan: Equatable {
             "--dmg", dmgURL.path,
             "--target-app", currentAppURL.path,
             "--bundle-id", bundleIdentifier,
+            "--reopen", reopenAfterInstall ? "true" : "false",
         ]
     }
 
-    init(dmgURL: URL, currentAppURL: URL, helperURL: URL, bundleIdentifier: String) {
+    init(
+        dmgURL: URL,
+        currentAppURL: URL,
+        helperURL: URL,
+        bundleIdentifier: String,
+        reopenAfterInstall: Bool
+    ) {
         self.dmgURL = dmgURL
         self.currentAppURL = currentAppURL
         self.helperURL = helperURL
         self.bundleIdentifier = bundleIdentifier
+        self.reopenAfterInstall = reopenAfterInstall
     }
 
-    static func bundled(dmgURL: URL, bundle: Bundle = .main) throws -> UpdateInstallerPlan {
+    static func bundled(
+        dmgURL: URL,
+        reopenAfterInstall: Bool,
+        bundle: Bundle = .main
+    ) throws -> UpdateInstallerPlan {
         let executableURL = bundle.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0])
         let appURL = try currentAppURL(executableURL: executableURL)
         let helperURL = appURL
@@ -57,7 +70,8 @@ struct UpdateInstallerPlan: Equatable {
             dmgURL: dmgURL,
             currentAppURL: appURL,
             helperURL: helperURL,
-            bundleIdentifier: bundleIdentifier)
+            bundleIdentifier: bundleIdentifier,
+            reopenAfterInstall: reopenAfterInstall)
     }
 
     static func currentAppURL(executableURL: URL) throws -> URL {
@@ -68,5 +82,39 @@ struct UpdateInstallerPlan: Equatable {
         }
         let appPath = components[0...appIndex].joined(separator: "/")
         return URL(fileURLWithPath: appPath.isEmpty ? "/" : appPath)
+    }
+}
+
+struct PendingUpdate: Equatable {
+    let version: String
+    let dmgPath: String
+}
+
+struct PendingUpdateStore {
+    private enum Key {
+        static let version = "update.pending.version"
+        static let dmgPath = "update.pending.dmgPath"
+    }
+
+    var defaults: UserDefaults = .standard
+
+    func save(_ update: PendingUpdate) {
+        defaults.set(update.version, forKey: Key.version)
+        defaults.set(update.dmgPath, forKey: Key.dmgPath)
+    }
+
+    func load() -> PendingUpdate? {
+        guard
+            let version = defaults.string(forKey: Key.version),
+            let dmgPath = defaults.string(forKey: Key.dmgPath),
+            !version.isEmpty,
+            !dmgPath.isEmpty
+        else { return nil }
+        return PendingUpdate(version: version, dmgPath: dmgPath)
+    }
+
+    func clear() {
+        defaults.removeObject(forKey: Key.version)
+        defaults.removeObject(forKey: Key.dmgPath)
     }
 }

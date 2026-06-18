@@ -153,7 +153,7 @@ struct FeedbackSheetView: View {
             sectionTitle(L("版本与更新"), icon: "arrow.triangle.2.circlepath")
             infoRow(L("当前版本"), FeedbackMetadata.appVersion)
             infoRow(L("Release 链接"), FeedbackClient.releaseURL.absoluteString)
-            infoRow(L("自动更新方式"), L("当前通过 GitHub Releases 下载更新；下载完成后可一键安装并重启。"))
+            infoRow(L("自动更新方式"), L("当前通过 GitHub Releases 下载更新；下载完成后可立即重启安装，也可退出后自动安装。"))
         }
     }
 
